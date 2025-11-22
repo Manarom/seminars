@@ -69,8 +69,8 @@
 
 ## Метод инвариантного погружения
 
-Семинар 22. Метод инвариантного погружения. [pdf](./applications\InvariantEmbedding\sem22\pdfs\sem22.pdf),[mlx](./applications\InvariantEmbedding\sem22\sem22.mlx)
+Семинар 22. Метод инвариантного погружения. [pdf](./applications/InvariantEmbedding/sem22/pdfs/sem22.pdf),[mlx](./applications/InvariantEmbedding/sem22/sem22.mlx)
 
 ### Нелинейная оптимизация с ограничениями
 
-Семинар 23 (Julia). Использование полиномов Бернштейна для оптимизации с ограничениями. [pdf](./applications\ConstraintOptimization\sem23\pdfs\sem23.pdf),[jl](./applications\ConstraintOptimization\sem23\sem23.jl)
+Семинар 23 (Julia). Использование полиномов Бернштейна для оптимизации с ограничениями. [pdf](./applications/ConstraintOptimization/sem23/pdfs/sem23.pdf),[jl](./applications/ConstraintOptimization/sem23/sem23.jl)
