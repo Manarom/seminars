@@ -61,15 +61,19 @@
 
 Семинар 19. Введение в интерполяцию. Сплайны. [pdf](./applications/Interpolation/sem18_19/pdfs/sem19.pdf),[mlx](./applications/Interpolation/sem18_19/sem19.mlx) 
 
+-------------------------------------
+
 ### Основы матлаб
 
 Семинар 20. Объектно-ориентированное программирование. [pdf](./basics/sem20_21/pdfs/sem20.pdf),[mlx](./basics/sem20_21/sem20.mlx)
 
 Семинар 21. ООП. Пример. Итераторы. [pdf](./basics/sem20_21/pdfs/sem21.pdf),[mlx](./basics/sem20_21/sem21.mlx)
 
-## Метод инвариантного погружения
+##№ Метод инвариантного погружения
 
 Семинар 22. Метод инвариантного погружения. [pdf](./applications/InvariantEmbedding/sem22/pdfs/sem22.pdf),[mlx](./applications/InvariantEmbedding/sem22/sem22.mlx)
+
+-------------------------------------
 
 ### Нелинейная оптимизация с ограничениями
 
