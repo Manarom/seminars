@@ -1,7 +1,21 @@
-# Семинары по матлаб и приложениям. 
+# Семинары по матлаб, джулия и приложениям. 
 
-Семинары в формате интерактивных ноутбуков MATLAB livescript, Julia Pluto ( статические версии в pdf) 
-с упором в программирование на MATLAB и Julia.
+Семинары в формате интерактивных ноутбуков для MATLAB это livescript, для Julia  - Pluto.
+
+Чтобы пользоваться ноутбуками Pluto на Julia,  необходимо:
+
+1. Установить язык [julia](https://julialang.org/downloads/)
+2. Запустить julia и в консоли (REPL) установить [Pluto.jl](https://plutojl.org)
+```julia
+import Pkg
+Pkg.add("Pluto.jl")
+using Pluto
+Pluto.run()
+```
+Последняя команда запускает локальный сервер ноутбуков (обычно на  http://localhost:1234/) в браузере.
+После запуска сервера можно открывать и запускать ноутбуки.
+
+Ниже приведено содержание предыдущих семинаров со ссылками на файлы ноутбуков и их статические в формате pdf.
 
 ## Содержание:
 -----------------
@@ -69,7 +83,8 @@
 
 Семинар 21. ООП. Пример. Итераторы. [pdf](./basics/sem20_21/pdfs/sem21.pdf),[mlx](./basics/sem20_21/sem21.mlx)
 
-##№ Метод инвариантного погружения
+------------------------------------
+## Метод инвариантного погружения
 
 Семинар 22. Метод инвариантного погружения. [pdf](./applications/InvariantEmbedding/sem22/pdfs/sem22.pdf),[mlx](./applications/InvariantEmbedding/sem22/sem22.mlx)
 
@@ -78,3 +93,8 @@
 ### Нелинейная оптимизация с ограничениями
 
 Семинар 23 (Julia). Использование полиномов Бернштейна для оптимизации с ограничениями. [pdf](./applications/ConstraintOptimization/sem23/pdfs/sem23.pdf),[jl](./applications/ConstraintOptimization/sem23/sem23.jl)
+
+--------------------------------------
+### Обратные задачи теплопроводности
+
+Семинар 24. Постановка обратных задач. Некорректность. Метод регуляризации Тихонова. [pdf](./applications/InverseHeatTransfer/sem24/pdfs/sem24.pdf), [mlx](./applications/InverseHeatTransfer/sem24/sem24.mlx)
