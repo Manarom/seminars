@@ -93,3 +93,8 @@ Pluto.run()
 ### Нелинейная оптимизация с ограничениями
 
 Семинар 23 (Julia). Использование полиномов Бернштейна для оптимизации с ограничениями. [pdf](./applications/ConstraintOptimization/sem23/pdfs/sem23.pdf),[jl](./applications/ConstraintOptimization/sem23/sem23.jl)
+
+--------------------------------------
+### Обратные задачи теплопроводности
+
+Семинар 24. Постановка обратных задач. Некорректность. Метод регуляризации Тихонова. [pdf](./applications/InverseHeatTransfer/sem24/pdfs/sem24.pdf), [mlx](./applications/InverseHeatTransfer/sem24/sem24.mlx)
