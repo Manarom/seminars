@@ -98,3 +98,5 @@ Pluto.run()
 ### Обратные задачи теплопроводности
 
 Семинар 24. Постановка обратных задач. Некорректность. Метод регуляризации Тихонова. [pdf](./applications/InverseHeatTransfer/sem24/pdfs/sem24.pdf), [mlx](./applications/InverseHeatTransfer/sem24/sem24.mlx)
+
+Семинар 25. Принцип максимального правдоподобия. Регуляризация при нелинейной оптимизации и метод Левенберга-Марквардта [pdf](./applications/InverseHeatTransfer/sem25/pdfs/sem25.pdf), [mlx](./applications/InverseHeatTransfer/sem25/sem25.mlx)
