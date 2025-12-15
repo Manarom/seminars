@@ -19,7 +19,7 @@ data = DataFrame(Y=data_dict["y"][:,1], X1=data_dict["X"][:,1],X2=data_dict["X"]
 
 # linear regression using lm function from GLM
 first_order= lm(@formula(Y ~ X1 + X2),data) # first order linear regression
-second_order = lm(@formula(Y ~ X1 + X2 +X1^2 + X2^2),data) # second order linear regression
+second_order = lm(@formula(Y ~ 1+ X1 + X2 + X1*X2 + X1^2 + X2^2),data) # second order linear regression
 # plotting results in 3d using Plots package functions
 # function for polynomial type selection
 function f_select(modl::StatisticalModel)
