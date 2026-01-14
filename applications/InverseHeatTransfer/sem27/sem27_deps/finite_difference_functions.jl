@@ -2,16 +2,16 @@ using LinearAlgebra
 """
     explicit_case1_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
-# C_f - функция теплоемкости от температуры(cp*Ro)
-# L_f - функция теплопроводности от температуры
-# Ld_f - функция производной теплопроводности от температуры
-# H - толщина в м
-# tmax - интервал времени
-# initT_f - функция начального распределения температуры от координаты 
-# BC_up_f - функция зависимости температуры сверху от времени
-# BC_dwn_f - функция зависимости температуры снизу от времени
-# N - число точек по координате
-# M - число точек по времени
+C_f - thermal capacity , (cp*Ro) (Kg/m^3 * J/(Kg*K))
+L_f - thermal conductivity, W/m*K
+Ld_f - thermal conductivity derivative with respect to temperature
+H - thickness, m
+tmax - time interval, s
+initT_f - function to evaluate the initial temperature distribution
+BC_up_f - upper BC function
+BC_dwn_f - lower BC function 
+N - points for coordinate
+M - points for time
 """
 function explicit_case1_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
@@ -54,6 +54,11 @@ function allocate_tridiagonal(n::Int,T::DataType)
     du = Vector{Float64}(undef, n-1)  # superdiagonal
     return Tridiagonal{}
 end
+"""
+    central_finite_difference(n)
+
+Returns central finite difference first oreder derivative matrix 
+"""
 function central_finite_difference(n)
     eu = fill(1.0, n-1)  # superdiagonal  
     el = fill(-1.0, n-1) # subdiagonal (first-order version)
@@ -63,16 +68,16 @@ end
 """
     implicit_case2_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
-# C_f - функция теплоемкости от температуры(cp*Ro)
-# L_f - функция теплопроводности от температуры
-# Ld_f - функция производной теплопроводности от температуры
-# H - толщина в м
-# tmax - интервал времени
-# initT_f - функция начального распределения температуры от координаты 
-# BC_up_f - функция зависимости температуры сверху от времени
-# BC_dwn_f - функция зависимости температуры снизу от времени
-# N - число точек по координате
-# M - число точек по времени
+C_f - thermal capacity , (cp*Ro) (Kg/m^3 * J/(Kg*K))
+L_f - thermal conductivity, W/m*K
+Ld_f - thermal conductivity derivative with respect to temperature
+H - thickness, m
+tmax - time interval, s
+initT_f - function to evaluate the initial temperature distribution
+BC_up_f - upper BC function
+BC_dwn_f - lower BC function 
+N - points for coordinate
+M - points for time
 """
 function implicit_case2_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
         x = range(0,H,N)# сетка по координате
@@ -80,7 +85,7 @@ function implicit_case2_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f
         dx = x[2] - x[1]
         dt = t[2] - t[1]
         T = Matrix{Float64}(undef,N,M)# columns - distribution, rows time
-        T[:,1] .= initT_f.(x);
+        T[:,1] .= initT_f.(x)# applying initial conditions
         T[1,:] .= BC_up_f.(t)# applying upper BC
         T[N,:] .= BC_dwn_f.(t)#applying lower BC
         dd = dt/(dx*dx)#
@@ -94,8 +99,8 @@ function implicit_case2_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f
         D = central_finite_difference(N) # creates finite difference matrix for b vector evaluation
         
         B0 = Vector{Float64}(undef, N) # B matrix diagonal
-        Bm1 = Vector{Float64}(undef, N-1) # B matrix diagonal
-        Bp1 = Vector{Float64}(undef, N-1) # B matrix diagonal
+        Bm1 = Vector{Float64}(undef, N - 1) # B matrix diagonal
+        Bp1 = Vector{Float64}(undef, N - 1) # B matrix diagonal
 
         B = Tridiagonal(Bm1,B0,Bp1) # creating tridiagonal matrix 
 
@@ -103,16 +108,16 @@ function implicit_case2_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f
         Fmp1 = @view Fm[1 : end - 1]
 
         for m = 1:M-1 #% цикл по времени
-            Tm = @view T[:,m] # current time 
-            @. lam_m = L_f(Tm) # теплопроводность для распределения температур  в m-й момент времени
-            @. Fm = dd*lam_m/C_f(Tm) # Fm - число Фурье (dx^-2)*dt*Cp/lam
-            @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - коэффициент при нелинейной функции
-            Tmp1 = @view T[:,m + 1] # next time 
+            Tm = @view T[:,m] # Tm current time
+            @. lam_m = L_f(Tm) # λ
+            @. Fm = dd*lam_m/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
+            @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - λ'/λ
+            Tmp1 = @view T[:,m + 1] # Tm+1 next time 
             # filling matrix diagonals
             @. B0 = 1 + 2*Fm
             @. Bm1 = - Fmm1
             @. Bp1 = - Fmp1
-            # applying boundary conditions
+            # applying boundary conditions to the LHS
             B0[1] = 1.0
             Bp1[1] = 0.0
             B0[end]= 1.0
@@ -121,9 +126,9 @@ function implicit_case2_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f
             # filling RHS
             @. b = b^2
             @. b *= Fm*phi_m
-            b[1] = Tmp1[1] - Tm[1]
-            b[end] = Tmp1[end] - Tm[end]   
-            @. b += Tm
+            b[1] = Tmp1[1] - Tm[1] # 1st order BC upper
+            b[end] = Tmp1[end] - Tm[end]   # 1st order BC lower
+            @. b += Tm # Tm + \vec{b}
 
             ldiv!(Tmp1,B,b)
         end

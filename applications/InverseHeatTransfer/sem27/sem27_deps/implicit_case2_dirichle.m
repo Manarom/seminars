@@ -32,19 +32,14 @@ ip0 = diagonal_inds(0,N, N); % индексы 0-й диагонали
             phi_m = Ld_f(T(:,m))./(lam_m*4); % phi
             b = Fm.*phi_m.*(D*T(:,m)) .^2;
             b(1) = T(1,m + 1) - T(1,m);
-            b(2) = b(2) + Fm()
             b(end) = T(end,m + 1) - T(end,m);
-            % b(1) = Fm(1)*T(1,m);
-            
-            % b(end) = Fm(end)*T(end,m);
-
 
             B(ip0) = 1 + 2*Fm;
             B(ip1) = - Fm(1:end-1);
             B(im1) = - Fm(2:end);
         
-            % B(1) = 1;B(1,2) = 0;B(1,3) = 0;
-            % B(end) = 1;B(end,end - 1) = 0;B(end,end - 1) = 0;
+            B(1) = 1;B(1,2) = 0;B(1,3) = 0;
+            B(end) = 1;B(end,end - 1) = 0;B(end,end - 1) = 0;
             T(:,m + 1) = B\(T(:,m) + b);
         end
 end
