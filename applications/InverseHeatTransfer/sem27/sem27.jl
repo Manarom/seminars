@@ -7,10 +7,13 @@ using InteractiveUtils
 # ╔═╡ c7400800-f152-11f0-a386-29e067f9216c
 using PlutoUI,Polynomials, BenchmarkTools,Plots
 
+# ╔═╡ ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
+include(raw"E:\projects\matlab-seminar\applications\InverseHeatTransfer\sem27\sem27_deps\finite_difference_functions.jl");
+
 # ╔═╡ 9386589f-1767-46a8-8a60-ec3f44a0970d
 deps_folder = joinpath(@__DIR__,"sem27_deps")
 
-# ╔═╡ ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
+# ╔═╡ 0eae0fd4-8b5d-448a-b935-e06d469f080b
 
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1242,5 +1245,6 @@ version = "1.13.0+0"
 # ╠═c7400800-f152-11f0-a386-29e067f9216c
 # ╠═9386589f-1767-46a8-8a60-ec3f44a0970d
 # ╠═ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
+# ╠═0eae0fd4-8b5d-448a-b935-e06d469f080b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

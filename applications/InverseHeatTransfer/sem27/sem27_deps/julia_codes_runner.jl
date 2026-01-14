@@ -35,3 +35,7 @@ BC_up_f = t -> Tinit + t*(Tmax - Tinit)/tmax#;% температура свер�
 (T2,) = implicit_case2_dirichle(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 plot(T2,st=:surface)
 #plot(T2 .-T,st=:surface)
+
+(TCN,) = crank_nicolson_case3_dirichle(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+
+plot(T2 .-TCN,st=:surface)
