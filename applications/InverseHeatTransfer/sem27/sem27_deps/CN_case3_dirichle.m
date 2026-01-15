@@ -1,5 +1,5 @@
 function [T,x,t,maxFn] = CN_case3_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-% explicit - CN - explicit
+% BDF1 = CN + explicit
 % C_f - thermal capacity function (cp*Ro)
 % L_f - thermal conductivity function
 % Ld_f - thermal conductivity derivative 
