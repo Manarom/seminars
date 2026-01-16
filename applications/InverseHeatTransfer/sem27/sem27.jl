@@ -17,7 +17,7 @@ macro bind(def, element)
 end
 
 # ╔═╡ c7400800-f152-11f0-a386-29e067f9216c
-using PlutoUI,Polynomials,Interpolations, BenchmarkTools,PlutoPlotly,Interpolations,Polynomials,LegendrePolynomials,StaticArrays,RecipesBase#Plots,PlotlyBase, 
+using PlutoUI,Polynomials,Interpolations, BenchmarkTools,PlutoPlotly,Interpolations,Polynomials,LegendrePolynomials,StaticArrays,NonlinearSolvers,RecipesBase#Plots,PlotlyBase, 
 
 # ╔═╡ 9386589f-1767-46a8-8a60-ec3f44a0970d
 deps_folder = joinpath(@__DIR__,"sem27_deps")
@@ -91,9 +91,20 @@ begin
 	BC_up_f = t -> Tinit + t*(Tmax - Tinit)/tmax# upper BC
 end
 
+# ╔═╡ b9a4856c-cd3a-4b2e-9b46-4850a77c9c4f
+func_names = OneDHeatTransfer.func_names
+
+# ╔═╡ d6145328-5f43-4148-8911-232c9fed39c4
+md"""
+Select solver: $(@bind solver_name  Select(func_names))
+"""
+
+# ╔═╡ d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
+fd_solver =getproperty(OneDHeatTransfer,solver_name)
+
 # ╔═╡ 9fbe7c0d-90b7-4348-8b22-d8058452a02b
 begin 
-	(TCN,) = crank_nicolson_case3_dirichle(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+	(TCN,) = fd_solver(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 end;
 
 # ╔═╡ 3acc0be7-dabc-4577-917d-26530cf192bd
@@ -109,7 +120,7 @@ begin
         aspectmode="cube"  # Or "data" to fit surface bounds
     )
 )
-	PlutoPlotly.plot(tr)
+	p = PlutoPlotly.plot(tr)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -118,6 +129,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
+NonlinearSolvers = "f4b8ab15-8e73-4e04-9661-b5912071d22b"
 PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
@@ -128,6 +140,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 BenchmarkTools = "~1.6.3"
 Interpolations = "~0.16.2"
 LegendrePolynomials = "~0.4.5"
+NonlinearSolvers = "~0.1.1"
 PlutoPlotly = "~0.6.5"
 PlutoUI = "~0.7.78"
 Polynomials = "~4.1.0"
@@ -141,7 +154,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "76988e9ca2a6044b3bb054808e0a974414044de1"
+project_hash = "a1d3328a203bb7551bcd935df3cd27637d9a3e69"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -226,6 +239,12 @@ git-tree-sha1 = "37ea44092930b1811e666c3bc38065d7d87fcc74"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.13.1"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools"]
+git-tree-sha1 = "cda2cfaebb4be89c9084adaca7dd7333369715c5"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.1"
+
 [[deps.Compat]]
 deps = ["TOML", "UUIDs"]
 git-tree-sha1 = "9d8a54ce4b17aa5bdce0ea5c34bc5e7c340d16ad"
@@ -267,15 +286,28 @@ git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
 
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
+
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
+
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 version = "1.11.0"
 
 [[deps.DocStringExtensions]]
-git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
+deps = ["LibGit2"]
+git-tree-sha1 = "b19534d1895d702889b219c382a6e18010797f0b"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-version = "0.9.5"
+version = "0.8.6"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -291,6 +323,16 @@ deps = ["Statistics"]
 git-tree-sha1 = "05882d6995ae5c12bb5f36dd2ed3f61c98cbb172"
 uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.5"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions"]
+git-tree-sha1 = "afb7c51ac63e40708a3071f80f5e84a752299d4f"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.39"
+weakdeps = ["StaticArrays"]
+
+    [deps.ForwardDiff.extensions]
+    ForwardDiffStaticArraysExt = "StaticArrays"
 
 [[deps.Future]]
 deps = ["Random"]
@@ -455,9 +497,21 @@ version = "1.11.0"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2025.11.4"
 
+[[deps.NaNMath]]
+deps = ["OpenLibm_jll"]
+git-tree-sha1 = "9b8215b1ee9e78a293f99797cd31375471b2bcae"
+uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
+version = "1.1.3"
+
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.3.0"
+
+[[deps.NonlinearSolvers]]
+deps = ["DocStringExtensions", "ForwardDiff"]
+git-tree-sha1 = "ba6bcd4f251b164aa804bf543ca3bed286f10585"
+uuid = "f4b8ab15-8e73-4e04-9661-b5912071d22b"
+version = "0.1.1"
 
 [[deps.OffsetArrays]]
 git-tree-sha1 = "117432e406b5c023f665fa73dc26e79ec3630151"
@@ -802,7 +856,7 @@ version = "17.7.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═c7400800-f152-11f0-a386-29e067f9216c
+# ╟─c7400800-f152-11f0-a386-29e067f9216c
 # ╟─9386589f-1767-46a8-8a60-ec3f44a0970d
 # ╟─ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
 # ╟─6c87fcb7-55e6-44f4-8978-12e74b9cfdbf
@@ -810,7 +864,10 @@ version = "17.7.0+0"
 # ╟─0eae0fd4-8b5d-448a-b935-e06d469f080b
 # ╟─1003bdef-9ad2-4d32-9059-99f46abae91f
 # ╟─e4aac0a1-d9c0-4e20-8f86-151090a9651f
+# ╟─b9a4856c-cd3a-4b2e-9b46-4850a77c9c4f
+# ╟─d6145328-5f43-4148-8911-232c9fed39c4
+# ╟─d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
 # ╟─9fbe7c0d-90b7-4348-8b22-d8058452a02b
-# ╟─3acc0be7-dabc-4577-917d-26530cf192bd
+# ╠═3acc0be7-dabc-4577-917d-26530cf192bd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
