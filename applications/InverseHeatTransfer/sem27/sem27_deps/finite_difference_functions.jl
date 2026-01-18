@@ -3,6 +3,33 @@ module OneDHeatTransfer
 
 using LinearAlgebra,NonlinearSolvers
  
+abstract type AbstractLHS end
+abstract type AbstractRHS end
+abstract type AbstractNL end
+
+struct BFD1_LHS <: AbstractLHS end
+struct BFD2_LHS <: AbstractLHS end
+
+struct exp_RHS <: AbstractRHS end
+struct imp_RHS <: AbstractRHS end
+struct CN_RHS <: AbstractRHS end
+
+struct exp_NL <: AbstractNL end
+
+const DDD = Ref(Tridiagonal(fill(-1.0, 2),fill(0.0, 3), fill(1.0, 2))) # stores the finite difference matrix 
+
+
+"""
+    fill_tridiag(Rm1,R0,Rp1,Fm1,F,Fp1,am1,a,ap1)
+
+Fills three vectors with coefficients
+"""
+function fill_tridiag!(Rm1,R0,Rp1,Fm1,F,Fp1,a0,am1,a,ap1)
+    @. Rm1 = am1*Fm1
+    @. R0 = a0 + a*F
+    @. Rp1 = ap1*Fp1
+    return nothing
+end
 """
 Bunch of functions to solve the non-linear transient heat transfer using finite difference
 
@@ -69,7 +96,7 @@ const func_names = [:BFD1_exp_exp_exp,
               :BFD1_imp_exp_exp,
               :BFD1_CN_exp_exp]
 export BFD1_exp_exp_exp,BFD1_imp_exp_exp,BFD1_CN_exp_exp
-# Customize signature per function in docstring if needed
+# generating docstrings
 for d in func_names
     sd = string(d)
     full_name = replace(sd,"BFD1" => "first-order-backward =",
@@ -133,11 +160,13 @@ end
 Returns central finite difference first order derivative matrix 
 """
 function central_finite_difference(n)
-    eu = fill(1.0, n-1)  # superdiagonal  
-    el = fill(-1.0, n-1) # subdiagonal (first-order version)
-    ed = fill(0.0, n)
-    return  Tridiagonal(el,ed, eu)
+    if size(DDD[],1) != n
+         DDD[] = Tridiagonal(fill(-1.0, n-1),fill(0.0, n), fill(1.0, n-1))   
+    end  
+    return  DDD[]
 end
+
+fill_LHS!(dl,d0,du,Fm1,F,Fp1,::Type{BFD1_LHS},::Type{imp_RHS}) = fill_tridiag!(dl,d0,du,Fm1,F,Fp1,1.0,-1.0,2.0,-1.0)
 
 @doc DOC_BFD1_imp_exp_exp
 function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
@@ -168,14 +197,15 @@ function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
         for m = 1:M-1 #% цикл по времени
             Tm = @view T[:,m] # Tm current time
+
             @. lam_m = L_f(Tm) # λ
             @. Fm = dd*lam_m/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
             @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - λ'/λ
+
             Tmp1 = @view T[:,m + 1] # Tm+1 next time 
             # filling matrix diagonals
-            @. L0 = 1 + 2*Fm # main diagonal
-            @. Lm1 = - Fmm1 # lower diagonal
-            @. Lp1 = - Fmp1 # upper diagonal
+            fill_LHS!(Lm1, L0, Lp1, Fmm1, Fm, Fmp1, BFD1_LHS, imp_RHS)
+
             # applying boundary conditions to the LHS
             L0[1] = 1.0
             Lp1[1] = 0.0
@@ -185,14 +215,20 @@ function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
             mul!(b,D,Tm) 
             @. b = b^2
             @. b *= Fm*phi_m
-            b[1] = Tmp1[1] - Tm[1] # 1st order BC upper
-            b[end] = Tmp1[end] - Tm[end]   # 1st order BC lower
             @. b += Tm # Tm + \vec{b}
+
+            b[1] = Tmp1[1]  # 1st order BC upper
+            b[end] = Tmp1[end]   # 1st order BC lower
+
 
             ldiv!(Tmp1,L,b) # solving
         end
    return (T,x,t,maxFn)
 end
+
+fill_RHS!(dl,d0,du,Fm1,F,Fp1,::Type{BFD1_LHS},::Type{CN_RHS}) = fill_tridiag!(dl, d0, du, Fm1, F, Fp1, 1.0 , 0.5, 1.0, 0.5)
+
+fill_LHS!(dl,d0,du,Fm1,F,Fp1,::Type{BFD1_LHS},::Type{CN_RHS}) = fill_tridiag!(dl, d0, du, Fm1, F, Fp1, 1.0, -0.5, 1.0, -0.5)
 
 @doc DOC_BFD1_CN_exp_exp
 function BFD1_CN_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
@@ -221,31 +257,30 @@ function BFD1_CN_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
         Fmm1 =@view Fm[2 : end] 
         Fmp1 = @view Fm[1 : end - 1]
 
-        for m = 1:M-1 #% цикл по времени
+        for m = 1:M-1 #
             Tm = @view T[:,m] # Tm current time
+
             @. lam_m = L_f(Tm) # λ
             @. Fm = dd*lam_m/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
             @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - λ'/λ
+
             Tmp1 = @view T[:,m + 1] # Tm+1 next time 
             # filling LHS matrix diagonals
-            @. L0 = 1 + Fm
-            @. Lm1 = - Fmm1/2
-            @. Lp1 = - Fmp1/2
+            fill_LHS!(Lm1,L0,Lp1,Fmm1,Fm,Fmp1,BFD1_LHS,CN_RHS)
+
             # applying boundary conditions to the LHS
             L0[1] = 1.0
             Lp1[1] = 0.0
             L0[end]= 1.0
             Lm1[end] =0.0   
             
-            # filling RHS matrix
-            @. R0 = 1 - Fm
-            @. Rm1 = Fmm1/2
-            @. Rp1 = Fmp1/2
+            # filling RHS matrix diagonals
+            fill_RHS!(Rm1,R0,Rp1,Fmm1,Fm,Fmp1,BFD1_LHS,CN_RHS)
+
             R0[1] = 1.0
             Rp1[1] = 0.0
             R0[end]= 1.0
             Rm1[end] =0.0   
-
 
             # filling RHS
             mul!(b,D,Tm)
@@ -261,24 +296,7 @@ function BFD1_CN_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
         end
    return (T,x,t,maxFn)
 end
-"""
-    bfd1_crank_nicolson_implicit_dirichle(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
-Solves the finite-difference non-linear heat transfer using :
-
-BFD1 for dT/dt
-
-C_f - thermal capacity , (cp*Ro) (Kg/m^3 * J/(Kg*K))
-L_f - thermal conductivity, W/m*K
-Ld_f - thermal conductivity derivative with respect to temperature
-H - thickness, m
-tmax - time interval, s
-initT_f - function to evaluate the initial temperature distribution
-BC_up_f - upper BC function
-BC_dwn_f - lower BC function 
-N - points for coordinate
-M - points for time
-"""
 function BFD2_CN_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
     error("TODO")
         x = range(0,H,N)# сетка по координате

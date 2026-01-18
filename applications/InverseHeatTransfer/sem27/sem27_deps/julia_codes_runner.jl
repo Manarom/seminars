@@ -5,11 +5,11 @@ include("finite_difference_functions.jl")
 
 
 lam_pars = (0.44,0.01,1e-7)
-lam_poly = Polynomials.ImmutablePolynomial( reverse(lam_pars))
+lam_poly = Polynomials.ImmutablePolynomial(lam_pars)
 lam_fun = T -> lam_poly(T) # теплопроводность
 lam_der_poly = Polynomials.ImmutablePolynomial( derivative(lam_poly))
 lam_der = T->lam_der_poly(T)#;% производная теплопроводности
-#plot(linspace(200,1000,30),lam_fun(linspace(200,1000,30)));title("Теплопроводность, Вт/(м*К)")
+plot(range(200.0,1000,30),lam_fun.(range(200.0,1000.0,30)))
 #plot(linspace(200,1000,30),lam_der(linspace(200,1000,30)));title("Производная теплопроводности, Вт/(м*К^2)")
 
 N = 50#;% число точек сетки по координате
@@ -33,6 +33,13 @@ BC_up_f = t -> Tinit + t*(Tmax - Tinit)/tmax#;% температура свер�
 plot(T2,st=:surface)
 #plot(T2 .-T,st=:surface)
 
-(TCN,) = OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+(TCN,) = OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, 
+            H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
-plot(T2 .-TCN,st=:surface)
+plot(T2 .- TCN,st=:surface)
+
+pp = plot(T .- TCN,st=:surface);
+pp
+
+@benchmark OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+@benchmark OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)

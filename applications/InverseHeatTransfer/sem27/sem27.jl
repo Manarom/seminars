@@ -16,17 +16,20 @@ macro bind(def, element)
     #! format: on
 end
 
+# ╔═╡ 5fe54406-20d7-4747-bcd4-c5c0f17af47a
+using Revise
+
 # ╔═╡ c7400800-f152-11f0-a386-29e067f9216c
 using PlutoUI,Polynomials,Interpolations, BenchmarkTools,PlutoPlotly,Interpolations,Polynomials,LegendrePolynomials,StaticArrays,NonlinearSolvers,RecipesBase#Plots,PlotlyBase, 
 
 # ╔═╡ 9386589f-1767-46a8-8a60-ec3f44a0970d
 deps_folder = joinpath(@__DIR__,"sem27_deps")
 
+# ╔═╡ ba9efa8d-054c-42a4-99a4-31319c87c54b
+include(joinpath(deps_folder,"PolynomialWrappers.jl"))
+
 # ╔═╡ ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
-begin 
-	include(joinpath(deps_folder,"finite_difference_functions.jl"))
-	include(joinpath(deps_folder,"PolynomialWrappers.jl"))
-end;
+includet(joinpath(deps_folder,"finite_difference_functions.jl"))
 
 # ╔═╡ 6c87fcb7-55e6-44f4-8978-12e74b9cfdbf
 begin
@@ -66,16 +69,8 @@ begin
 	PolyType = BernsteinSymPolyWrapper{length(lam_pars),Float64}
 	V = VanderMatrix(x,PolyType)
 	lam_values = Vector(V*SVector(lam_pars)) 
-	plot(Vector(x),Vector(lam_values))
-	
+	plot(Vector(x),Vector(lam_values),title="thermal conductivity")
 end
-
-# ╔═╡ 1003bdef-9ad2-4d32-9059-99f46abae91f
-function polyder(p)
-    N = length(p)
-    return ntuple(i->(N-i)*p[i],N-1)
-end
-
 
 # ╔═╡ e4aac0a1-d9c0-4e20-8f86-151090a9651f
 begin 
@@ -92,7 +87,7 @@ begin
 end
 
 # ╔═╡ b9a4856c-cd3a-4b2e-9b46-4850a77c9c4f
-func_names = OneDHeatTransfer.func_names
+func_names = Main.OneDHeatTransfer.func_names
 
 # ╔═╡ d6145328-5f43-4148-8911-232c9fed39c4
 md"""
@@ -100,7 +95,7 @@ Select solver: $(@bind solver_name  Select(func_names))
 """
 
 # ╔═╡ d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
-fd_solver =getproperty(OneDHeatTransfer,solver_name)
+fd_solver =getproperty(Main.OneDHeatTransfer,solver_name)
 
 # ╔═╡ 9fbe7c0d-90b7-4348-8b22-d8058452a02b
 begin 
@@ -120,7 +115,7 @@ begin
         aspectmode="cube"  # Or "data" to fit surface bounds
     )
 )
-	p = PlutoPlotly.plot(tr)
+	p_ly = PlutoPlotly.plot(tr)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -134,6 +129,7 @@ PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
@@ -145,6 +141,7 @@ PlutoPlotly = "~0.6.5"
 PlutoUI = "~0.7.78"
 Polynomials = "~4.1.0"
 RecipesBase = "~1.3.4"
+Revise = "~3.13.1"
 StaticArrays = "~1.9.16"
 """
 
@@ -154,7 +151,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "a1d3328a203bb7551bcd935df3cd27637d9a3e69"
+project_hash = "12e21ad8501371cc802643df452028cd4ac69693"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -207,6 +204,12 @@ weakdeps = ["SparseArrays"]
     [deps.ChainRulesCore.extensions]
     ChainRulesCoreSparseArraysExt = "SparseArrays"
 
+[[deps.CodeTracking]]
+deps = ["InteractiveUtils", "UUIDs"]
+git-tree-sha1 = "b7231a755812695b8046e8471ddc34c8268cbad5"
+uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
+version = "3.0.0"
+
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
 git-tree-sha1 = "b0fd3f56fa442f81e0a47815c92245acfaaa4e34"
@@ -254,6 +257,11 @@ weakdeps = ["Dates", "LinearAlgebra"]
 
     [deps.Compat.extensions]
     CompatLinearAlgebraExt = "LinearAlgebra"
+
+[[deps.Compiler]]
+git-tree-sha1 = "382d79bfe72a406294faca39ef0c3cef6e6ce1f1"
+uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
+version = "0.1.1"
 
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -404,6 +412,12 @@ version = "1.4.0"
     [deps.JSON.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
 
+[[deps.JuliaInterpreter]]
+deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
+git-tree-sha1 = "80580012d4ed5a3e8b18c7cd86cebe4b816d17a6"
+uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
+version = "0.10.9"
+
 [[deps.JuliaSyntaxHighlighting]]
 deps = ["StyledStrings"]
 uuid = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
@@ -473,6 +487,12 @@ version = "0.3.29"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 version = "1.11.0"
+
+[[deps.LoweredCodeUtils]]
+deps = ["CodeTracking", "Compiler", "JuliaInterpreter"]
+git-tree-sha1 = "65ae3db6ab0e5b1b5f217043c558d9d1d33cc88d"
+uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
+version = "3.5.0"
 
 [[deps.MIMEs]]
 git-tree-sha1 = "c64d943587f7187e751162b3b84445bbbd79f691"
@@ -684,6 +704,16 @@ git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.1"
 
+[[deps.Revise]]
+deps = ["CodeTracking", "FileWatching", "InteractiveUtils", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
+git-tree-sha1 = "dfd6fab9aa325b382773b8930998ce84c2918e5e"
+uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
+version = "3.13.1"
+weakdeps = ["Distributed"]
+
+    [deps.Revise.extensions]
+    DistributedExt = "Distributed"
+
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
@@ -856,18 +886,19 @@ version = "17.7.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─c7400800-f152-11f0-a386-29e067f9216c
-# ╟─9386589f-1767-46a8-8a60-ec3f44a0970d
-# ╟─ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
+# ╠═c7400800-f152-11f0-a386-29e067f9216c
+# ╠═5fe54406-20d7-4747-bcd4-c5c0f17af47a
+# ╠═9386589f-1767-46a8-8a60-ec3f44a0970d
+# ╠═ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
+# ╠═ba9efa8d-054c-42a4-99a4-31319c87c54b
 # ╟─6c87fcb7-55e6-44f4-8978-12e74b9cfdbf
 # ╟─8f6d3be5-ffb5-41d5-8e50-f4353193c53c
 # ╟─0eae0fd4-8b5d-448a-b935-e06d469f080b
-# ╟─1003bdef-9ad2-4d32-9059-99f46abae91f
 # ╟─e4aac0a1-d9c0-4e20-8f86-151090a9651f
 # ╟─b9a4856c-cd3a-4b2e-9b46-4850a77c9c4f
 # ╟─d6145328-5f43-4148-8911-232c9fed39c4
 # ╟─d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
 # ╟─9fbe7c0d-90b7-4348-8b22-d8058452a02b
-# ╠═3acc0be7-dabc-4577-917d-26530cf192bd
+# ╟─3acc0be7-dabc-4577-917d-26530cf192bd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
