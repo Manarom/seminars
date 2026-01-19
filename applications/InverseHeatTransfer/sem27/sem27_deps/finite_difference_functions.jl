@@ -2,10 +2,21 @@
 module OneDHeatTransfer
 
 using LinearAlgebra,NonlinearSolvers
+
+using AllocCheck
  
 abstract type AbstractLHS end
 abstract type AbstractRHS end
 abstract type AbstractNL end
+abstract type AbstractBC end
+
+struct DirichletBC<:AbstractBC end
+struct NeumanBC<:AbstractBC end
+struct RobinBC<: AbstractBC end
+
+abstract type AbstractBCDirection end
+struct LowerBC <: AbstractBCDirection end
+struct UpperBC <: AbstractBCDirection end
 
 struct BFD1_LHS <: AbstractLHS end
 struct BFD2_LHS <: AbstractLHS end
@@ -30,29 +41,7 @@ function fill_tridiag!(Rm1,R0,Rp1,Fm1,F,Fp1,a0,am1,a,ap1)
     @. Rp1 = ap1*Fp1
     return nothing
 end
-"""
-Bunch of functions to solve the non-linear transient heat transfer using finite difference
 
-    a(T)Tₜ= Tₓₓ + (λ'/λ)*(Tₓ)²
-    T(0,t) = f(t)
-    T(H,t) = g(t)
-    T(x,0) = Tᵢ(x)
-
-    Name convention of the functions:
-
-    lefthand side  _ second derivative _ nonlinear part _ material properties
-    e.g.:
-    BFD1_imp_exp_exp  => first order time derivative,
-    implicit scheme for the second derivative, explicit nonlinear part, explicit physical properties
-
-    imp - fully implicit
-    exp - fully explicit
-    CN - Crank-Nicolson
-    BFD1 - first order backward derivative
-    BFD2 - second order backward werivative
-
-"""
-OneDHeatTransfer
 
 const COMMON_DOC = """
     func(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
@@ -110,19 +99,46 @@ for d in func_names
     @eval $dsds = replace($cur_doc,"func" => $sd)
 end
 
-@doc DOC_BFD1_exp_exp_exp
-function BFD1_exp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+explicit_bc(::T,::DirichletBC, Tm, bc_fun, t, F, ϕ, λ, dx) where T<: AbstractBCDirection= bc_fun(t)
 
-    x = range(0,H,N)# сетка по координате
-    t = range(0,tmax,M)# сетка по времени
-    dx = x[2] - x[1]
-    dt = t[2] - t[1]
+explicit_bc(bc_direction::T,::NeumanBC,
+                 Tm, bc_fun, t, F, ϕ, λ, dx) where T<: AbstractBCDirection = explicit_hf_bc(bc_direction, Tm, bc_fun(t), F, ϕ, λ, dx)
+
+explicit_bc(::UpperBC,::RobinBC,
+                 Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(UpperBC, Tm, bc_fun(Tm[1]), F, ϕ, λ, dx)
+
+explicit_bc(::LowerBC,::RobinBC,
+                 Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(UpperBC, Tm, bc_fun(Tm[end]), F, ϕ, λ, dx)                 
+
+function explicit_hf_bc(::UpperBC, Tm, hf, F, ϕ, λ, dx)
+    T0 = Tm[2] - (2 * dx * hf / λ)                       
+    return explicit_iteration(F, ϕ, T0, Tm[1], Tm[3])
+end
+
+function explicit_hf_bc(::LowerBC,Tm, hf, F, ϕ, λ, dx)
+    TNp1 = Tm[end - 1] + (2 * dx * hf / λ)                       
+    return explicit_iteration(F, ϕ,  Tm[end - 1], Tm[end], TNp1)
+end
+function explicit_iteration(F,fi,T1::T,T2::T,T3::T)
+        return F * (T1 + T3) + (1 - 2*F) * T2 +  F * fi * (T1 - T3)^2 
+end
+#@doc DOC_BFD1_exp_exp_exp
+@check_allocs function BFD1_exp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N;
+                 upper_bc_type::AbstractBC = DirichletBC() , 
+                 lower_bc_type::AbstractBC = NeumanBC())
+
+   #x = range(0,H,N)# сетка по координате
+    #t = range(0,tmax,M)# сетка по времени
+    dx = H/(N - 1)
+    dt = tmax/(M - 1)
     T = Matrix{Float64}(undef,N,M)# columns - distribution, rows time
-    T[:,1] .= initT_f.(x);
-    T[1,:] .= BC_up_f.(t)# applying upper BC
-    T[N,:] .= BC_dwn_f.(t)#applying lower BC
+    T[:,1] .= initT_f.(0 : dx : H);
+    #T[1,:] .= BC_up_f.(t)# applying upper BCs
+    #T[N,:] .= BC_dwn_f.(t)#applying lower BC
     dd = dt/(dx*dx)#
     maxFn = 0.0;
+    upper_bc_flag = UpperBC()
+    lower_bc_flag = LowerBC()
     # allocating vectors of column size
     Fm = Vector{Float64}(undef,N)
     phi_m = Vector{Float64}(undef,N)
@@ -132,20 +148,22 @@ function BFD1_exp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
             @. lam_m = L_f(Tm) # теплопроводность для распределения температур  в m-й момент времени
             @. Fm = dd*lam_m/C_f(Tm) # Fm - число Фурье (dx^-2)*dt*Cp/lam
             @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - коэффициент при нелинейной функции
-            
-            for n = 2:N-1 #% цикл по координате
-                r = Fm[n];
-                r1 = 1 - 2*r;
-                fi = phi_m[n];
-                b_n = r*fi*(T[n - 1,m] - T[n + 1,m])^2 # [\vec{b}^m(\vec{T}^m)]_n= F_{n}^m \phi_{n}^m (T^{m}_{n-1} - T^{m}_{n+1})^2
-                T[n,m + 1] = r*(T[n - 1,m] + T[n + 1,m]) + r1*T[n,m] + b_n 
-                if r > maxFn
+
+            T[1, m + 1] = explicit_bc(upper_bc_flag, upper_bc_type, Tm, BC_up_f, dt*(m - 1), Fm[1], phi_m[1],lam_m[1], dx)
+
+            for n = 2 : N - 1 #% цикл по координате
+                r = Fm[n]
+                T[n, m + 1] = explicit_iteration(Fm[n], phi_m[n], T[n - 1, m] , T[n , m], T[n + 1 , m])
+                if  r > maxFn
                     maxFn = r;
                 end
             end
+
+            T[end, m + 1] = explicit_bc(lower_bc_flag, lower_bc_type, Tm, BC_dwn_f, dt*(m - 1), Fm[end], phi_m[end],lam_m[end], dx)
         end
-        return (T,x,t)
+        return (T,dx,dt)
     end
+
 function allocate_tridiagonal(N::Int,T::DataType = Float64)
     B0 = Vector{T}(undef, N) # B matrix diagonal
     Bm1 = Vector{T}(undef, N - 1) # B matrix diagonal
@@ -364,4 +382,30 @@ function BFD2_CN_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
         end
    return (T,x,t,maxFn)
 end
+
+"""
+Bunch of functions to solve the non-linear transient heat transfer using finite difference
+
+    a(T)Tₜ= Tₓₓ + (λ'/λ)*(Tₓ)²
+    T(0,t) = f(t)
+    T(H,t) = g(t)
+    T(x,0) = Tᵢ(x)
+
+    Name convention of the functions:
+
+    lefthand side  _ second derivative _ nonlinear part _ material properties
+    e.g.:
+    BFD1_imp_exp_exp  => first order time derivative,
+    implicit scheme for the second derivative, explicit nonlinear part, explicit physical properties
+
+    imp - fully implicit
+    exp - fully explicit
+    CN - Crank-Nicolson
+    BFD1 - first order backward derivative
+    BFD2 - second order backward werivative
+
+"""
+OneDHeatTransfer
+
+
 end

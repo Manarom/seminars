@@ -20,7 +20,10 @@ end
 using Revise
 
 # ╔═╡ c7400800-f152-11f0-a386-29e067f9216c
-using PlutoUI,Polynomials,Interpolations, BenchmarkTools,PlutoPlotly,Interpolations,Polynomials,LegendrePolynomials,StaticArrays,NonlinearSolvers,RecipesBase#Plots,PlotlyBase, 
+using PlutoUI,Polynomials,Interpolations, BenchmarkTools,PlutoPlotly,Interpolations,Polynomials,LegendrePolynomials,StaticArrays,NonlinearSolvers,RecipesBase#Plots,, 
+
+# ╔═╡ b8d791bf-976d-4a0d-b6c0-af9d0febe464
+using PlotlyBase
 
 # ╔═╡ 9386589f-1767-46a8-8a60-ec3f44a0970d
 deps_folder = joinpath(@__DIR__,"sem27_deps")
@@ -34,7 +37,7 @@ includet(joinpath(deps_folder,"finite_difference_functions.jl"))
 # ╔═╡ 6c87fcb7-55e6-44f4-8978-12e74b9cfdbf
 begin
 	N = 50# coordinate grid
-	M = 100# time grid
+	M = 10000# time grid
 	Tmax = 1000.0# max temperature
 	tmax = 100.0# heating time
 	Tinit = 20.0# starting temperature
@@ -94,13 +97,26 @@ md"""
 Select solver: $(@bind solver_name  Select(func_names))
 """
 
+# ╔═╡ f6825592-e3b6-4e11-8e57-6b94880d70e2
+md"""
+	Select upper BC type: $(@bind upper_bc_type  Select(subtypes(Main.OneDHeatTransfer.AbstractBC)))
+	"""
+
+# ╔═╡ 07454c22-e13d-4d91-9cac-b03a400a8e8f
+md"""
+	Select lower BC type: $(@bind lower_bc_type  Select(subtypes(Main.OneDHeatTransfer.AbstractBC)))
+	"""
+
 # ╔═╡ d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
 fd_solver =getproperty(Main.OneDHeatTransfer,solver_name)
 
 # ╔═╡ 9fbe7c0d-90b7-4348-8b22-d8058452a02b
 begin 
-	(TCN,) = fd_solver(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+	(TCN,) = fd_solver(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N, upper_bc_type, lower_bc_type)
 end;
+
+# ╔═╡ 04a213ce-aaa7-4da1-be7c-646c34bd39e2
+TCN
 
 # ╔═╡ 3acc0be7-dabc-4577-917d-26530cf192bd
 begin 
@@ -125,6 +141,7 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
 NonlinearSolvers = "f4b8ab15-8e73-4e04-9661-b5912071d22b"
+PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
@@ -137,6 +154,7 @@ BenchmarkTools = "~1.6.3"
 Interpolations = "~0.16.2"
 LegendrePolynomials = "~0.4.5"
 NonlinearSolvers = "~0.1.1"
+PlotlyBase = "~0.8.23"
 PlutoPlotly = "~0.6.5"
 PlutoUI = "~0.7.78"
 Polynomials = "~4.1.0"
@@ -151,7 +169,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "12e21ad8501371cc802643df452028cd4ac69693"
+project_hash = "0bc27a3f9dea509c87494ac77cb0a0dbaf6dd009"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -887,18 +905,22 @@ version = "17.7.0+0"
 
 # ╔═╡ Cell order:
 # ╠═c7400800-f152-11f0-a386-29e067f9216c
+# ╠═b8d791bf-976d-4a0d-b6c0-af9d0febe464
 # ╠═5fe54406-20d7-4747-bcd4-c5c0f17af47a
 # ╠═9386589f-1767-46a8-8a60-ec3f44a0970d
 # ╠═ada6d5ce-ac5e-4de8-b9fe-4394be6a34ca
 # ╠═ba9efa8d-054c-42a4-99a4-31319c87c54b
-# ╟─6c87fcb7-55e6-44f4-8978-12e74b9cfdbf
-# ╟─8f6d3be5-ffb5-41d5-8e50-f4353193c53c
+# ╠═6c87fcb7-55e6-44f4-8978-12e74b9cfdbf
+# ╠═8f6d3be5-ffb5-41d5-8e50-f4353193c53c
 # ╟─0eae0fd4-8b5d-448a-b935-e06d469f080b
 # ╟─e4aac0a1-d9c0-4e20-8f86-151090a9651f
-# ╟─b9a4856c-cd3a-4b2e-9b46-4850a77c9c4f
+# ╠═b9a4856c-cd3a-4b2e-9b46-4850a77c9c4f
 # ╟─d6145328-5f43-4148-8911-232c9fed39c4
-# ╟─d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
-# ╟─9fbe7c0d-90b7-4348-8b22-d8058452a02b
-# ╟─3acc0be7-dabc-4577-917d-26530cf192bd
+# ╟─f6825592-e3b6-4e11-8e57-6b94880d70e2
+# ╟─07454c22-e13d-4d91-9cac-b03a400a8e8f
+# ╠═d8e97e88-da66-48d7-b5cd-4c1b3d9a4c4c
+# ╠═9fbe7c0d-90b7-4348-8b22-d8058452a02b
+# ╠═04a213ce-aaa7-4da1-be7c-646c34bd39e2
+# ╠═3acc0be7-dabc-4577-917d-26530cf192bd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
