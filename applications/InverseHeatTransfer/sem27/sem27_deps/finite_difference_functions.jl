@@ -102,7 +102,7 @@ end
 explicit_bc(::T,::DirichletBC, Tm, bc_fun, t, F, ϕ, λ, dx) where T<: AbstractBCDirection= bc_fun(t)
 
 explicit_bc(bc_direction::T,::NeumanBC,
-                 Tm, bc_fun, t, F, ϕ, λ, dx) where T<: AbstractBCDirection = explicit_hf_bc(bc_direction, Tm, bc_fun(t), F, ϕ, λ, dx)
+                 Tm, bc_fun, t, F, ϕ, λ, dx) where T <: AbstractBCDirection = explicit_hf_bc(bc_direction, Tm, bc_fun(t), F, ϕ, λ, dx)
 
 explicit_bc(::UpperBC,::RobinBC,
                  Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(UpperBC, Tm, bc_fun(Tm[1]), F, ϕ, λ, dx)
@@ -119,11 +119,11 @@ function explicit_hf_bc(::LowerBC,Tm, hf, F, ϕ, λ, dx)
     TNp1 = Tm[end - 1] + (2 * dx * hf / λ)                       
     return explicit_iteration(F, ϕ,  Tm[end - 1], Tm[end], TNp1)
 end
-function explicit_iteration(F,fi,T1::T,T2::T,T3::T)
+function explicit_iteration(F,fi,T1,T2,T3)
         return F * (T1 + T3) + (1 - 2*F) * T2 +  F * fi * (T1 - T3)^2 
 end
 #@doc DOC_BFD1_exp_exp_exp
-@check_allocs function BFD1_exp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N;
+ function BFD1_exp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N;
                  upper_bc_type::AbstractBC = DirichletBC() , 
                  lower_bc_type::AbstractBC = NeumanBC())
 
@@ -143,8 +143,11 @@ end
     Fm = Vector{Float64}(undef,N)
     phi_m = Vector{Float64}(undef,N)
     lam_m = Vector{Float64}(undef,N)
-        for m = 1:M-1 #% цикл по времени
+        for m = 1:M - 1 #% цикл по времени
             Tm = @view T[:,m]
+            #map!(L_f, lam_m, Tm)
+            #map!(C_f, Fm, Tm)
+            # Fm .= dd*lam_m ./Fm
             @. lam_m = L_f(Tm) # теплопроводность для распределения температур  в m-й момент времени
             @. Fm = dd*lam_m/C_f(Tm) # Fm - число Фурье (dx^-2)*dt*Cp/lam
             @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - коэффициент при нелинейной функции
@@ -184,7 +187,7 @@ function central_finite_difference(n)
     return  DDD[]
 end
 
-fill_LHS!(dl,d0,du,Fm1,F,Fp1,::Type{BFD1_LHS},::Type{imp_RHS}) = fill_tridiag!(dl,d0,du,Fm1,F,Fp1,1.0,-1.0,2.0,-1.0)
+fill_LHS!(dl,d0,du,Fm1,F,Fp1,::BFD1_LHS,::imp_RHS) = fill_tridiag!(dl,d0,du,Fm1,F,Fp1,1.0,-1.0,2.0,-1.0)
 
 @doc DOC_BFD1_imp_exp_exp
 function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
@@ -203,7 +206,8 @@ function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
         phi_m = Vector{Float64}(undef,N)
         lam_m = Vector{Float64}(undef,N)
         b = Vector{Float64}(undef,N)
-
+        lhs_type = BFD1_LHS()
+        rhs_type = imp_RHS()
         D = central_finite_difference(N) # creates finite difference matrix for b vector evaluation
         
         # allocating left and right matrices
@@ -222,7 +226,7 @@ function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
             Tmp1 = @view T[:,m + 1] # Tm+1 next time 
             # filling matrix diagonals
-            fill_LHS!(Lm1, L0, Lp1, Fmm1, Fm, Fmp1, BFD1_LHS, imp_RHS)
+            fill_LHS!(Lm1, L0, Lp1, Fmm1, Fm, Fmp1, lhs_type, rhs_type)
 
             # applying boundary conditions to the LHS
             L0[1] = 1.0

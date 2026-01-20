@@ -52,6 +52,6 @@ plot(T2,st=:surface)
 
 plot(T2 .- TCN,st=:surface)
 
-
-@benchmark OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-@benchmark OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+#@benchmark OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+#@benchmark OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+@benchmark OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
