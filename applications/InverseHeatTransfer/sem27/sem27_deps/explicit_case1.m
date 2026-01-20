@@ -41,7 +41,7 @@ function [T,x,t,maxFn] = explicit_case1(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,B
             else
                 hf = BC_up_f(T(1,m));
             end
-            T0 = T(2,m) - (2*dx*hf/lam_m(1)); % T^m_2 - 2\Delta x \frac{q^m}{\lambda_1^m}                       
+            T0 = T(2,m) + (2*dx*hf/lam_m(1)); % T^m_2 - 2\Delta x \frac{q^m}{\lambda_1^m}                       
             T(1,m + 1) = iteration_step(Fm(1),phi_m(1),T0,T(1,m),T(2,m));
         end
         for n = 2 : N-1 % goes from 2 to N-1 coordinate nod

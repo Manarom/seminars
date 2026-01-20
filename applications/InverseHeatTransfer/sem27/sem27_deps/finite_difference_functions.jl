@@ -104,14 +104,14 @@ explicit_bc(::T,::DirichletBC, Tm, bc_fun, t, F, ϕ, λ, dx) where T<: AbstractB
 explicit_bc(bc_direction::T,::NeumanBC,
                  Tm, bc_fun, t, F, ϕ, λ, dx) where T <: AbstractBCDirection = explicit_hf_bc(bc_direction, Tm, bc_fun(t), F, ϕ, λ, dx)
 
-explicit_bc(::UpperBC,::RobinBC,
-                 Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(UpperBC, Tm, bc_fun(Tm[1]), F, ϕ, λ, dx)
+explicit_bc(bc::UpperBC,::RobinBC,
+                 Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(bc, Tm, bc_fun(Tm[1]), F, ϕ, λ, dx)
 
-explicit_bc(::LowerBC,::RobinBC,
-                 Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(UpperBC, Tm, bc_fun(Tm[end]), F, ϕ, λ, dx)                 
+explicit_bc(bc::LowerBC,::RobinBC,
+                 Tm, bc_fun, t, F, ϕ, λ, dx) = explicit_hf_bc(bc, Tm, bc_fun(Tm[end]), F, ϕ, λ, dx)                 
 
 function explicit_hf_bc(::UpperBC, Tm, hf, F, ϕ, λ, dx)
-    T0 = Tm[2] - (2 * dx * hf / λ)                       
+    T0 = Tm[2] + (2 * dx * hf / λ)                       
     return explicit_iteration(F, ϕ, T0, Tm[1], Tm[3])
 end
 
@@ -140,17 +140,20 @@ end
     upper_bc_flag = UpperBC()
     lower_bc_flag = LowerBC()
     # allocating vectors of column size
-    Fm = Vector{Float64}(undef,N)
+    Fm =    Vector{Float64}(undef,N)
     phi_m = Vector{Float64}(undef,N)
     lam_m = Vector{Float64}(undef,N)
+    C_m =   Vector{Float64}(undef,N)
         for m = 1:M - 1 #% цикл по времени
             Tm = @view T[:,m]
             #map!(L_f, lam_m, Tm)
             #map!(C_f, Fm, Tm)
             # Fm .= dd*lam_m ./Fm
             @. lam_m = L_f(Tm) # теплопроводность для распределения температур  в m-й момент времени
-            @. Fm = dd*lam_m/C_f(Tm) # Fm - число Фурье (dx^-2)*dt*Cp/lam
-            @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - коэффициент при нелинейной функции
+            @. C_m = C_f(Tm)
+            @. Fm = dd*lam_m/C_m # Fm - число Фурье (dx^-2)*dt*Cp/lam
+            @. phi_m = 0.25 * Ld_f(Tm) #phi  - коэффициент при нелинейной функции
+            @. phi_m /= lam_m
 
             T[1, m + 1] = explicit_bc(upper_bc_flag, upper_bc_type, Tm, BC_up_f, dt*(m - 1), Fm[1], phi_m[1],lam_m[1], dx)
 
