@@ -4,6 +4,9 @@ module OneDHeatTransfer
 using LinearAlgebra,NonlinearSolvers
 
 using AllocCheck
+
+const USE_FASTMATH = true
+
 # this types are used to dispatch on different schemes  
 abstract type AbstractTimeScheme end # left-hand side part 
 abstract type AbstractCoordinateScheme end # right-hand side part 
@@ -32,6 +35,9 @@ abstract type AbstractBCDirection end
 struct LowerBC <: AbstractBCDirection end
 struct UpperBC <: AbstractBCDirection end
 
+const LOWER_BC = LowerBC()
+const UPPER_BC = UpperBC()
+
 const DDD = Ref(Tridiagonal(fill(-1.0, 2),fill(0.0, 3), fill(1.0, 2))) # stores the finite difference matrix 
 
 
@@ -56,6 +62,13 @@ function fill_tridiag!(M::Tridiagonal{T,Vector{T}},Fm1::AbstractVector{T},F::Abs
     M.du[k] = ap1*Fp1[k]
     return nothing
 end
+function fill_tridiag_sym!(M::Tridiagonal{T,Vector{T}},F::AbstractVector{T}, a0,am1,a,ap1, k::Int)  where T
+    M.d[k] = a0 + a * F[k]
+    M.dl[k] = am1 * F[k]
+    M.du[k] = ap1 * F[k]
+    return nothing
+end
+
 function tridiag_sum(Fm1::AbstractVector{T},F::AbstractVector{T}, Fp1::AbstractVector{T}, a0, am1, a, ap1, k::Int) where T
     return a0 + am1*Fm1[k] +  a*F[k] + ap1*Fp1[k]
 end
@@ -68,46 +81,71 @@ end
 fills the vector b = M*b as M = Tridiagonal(Fm1*am1, a0 + a*F, Fp1*ap1) , N is the length of b
 
 """
-function tridiag_mul!(b::AbstractVector{T},Fm1::AbstractVector{T},
-                                    F::AbstractVector{T}, Fp1::AbstractVector{T}, a0, 
-                                    am1, a, ap1,N::Int)  where T
+function tridiag_mul!(b::AbstractVector{T},
+                                    Fm1::AbstractVector{T},F::AbstractVector{T}, Fp1::AbstractVector{T}, 
+                                    a0, am1, a, ap1,
+                                    N::Int)  where T
 
     (N == length(b) && N == length(F) && N - 1 == length(Fp1) && N - 1 == length(Fm1)) || throw(DimensionMismatch("incosistent dimentions"))
 
     bm1 = b[1]
 
-    b[1] = (a0 + a*F[1])*b[1] + ap1*Fp1[1]*b[2]
-    @inbounds for ii in 2 : N - 1
+    b[1] = (a0 + a * F[1]) * b[1] + ap1 * Fp1[1] * b[2]
+    @inbounds @fastmath for ii in 2 : N - 1
         b1, b2, b3 = bm1, b[ii], b[ii + 1]
-        f1,f2,f3 = Fm1[ii - 1],F[ii],Fp1[ii] 
-        b[ii] = am1*b1*f1+ b2*(a0 + a*f2) + ap1*b3*f3
+        f1, f2, f3 = Fm1[ii - 1],F[ii],Fp1[ii] 
+        b[ii] = am1 * b1 * f1 + b2*(a0 + a*f2) + ap1 *b3 *f3
         bm1 = b2
     end
-    b[N] = b[N]*(a0 + a*F[N]) + am1*bm1*Fm1[N - 1] 
+    b[N] = am1 * bm1 * Fm1[N - 1]  + b[N]*(a0 + a*F[N]) 
 
     return nothing
 end
 
-function column_sym_tridiag_mul!(b::AbstractVector{T}, F::AbstractVector{T}, a0, a, ap1, N::Int)  where T
+function column_sym_tridiag_mul!(b::AbstractVector{T}, F::AbstractVector{T}, a0, a, a1, N::Int)  where T
 
-    (N == length(b) && N == length(F) ) || throw(DimensionMismatch("incosistent dimentions"))
+    (N > 0 && N == length(b) && N == length(F) ) || throw(DimensionMismatch("incosistent dimentions"))
 
     bm1 = b[1]
+    b[1] = (a0 + a*F[1])*b[1] + a1*F[1]*b[2]
 
-    b[1] = (a0 + a*F[1])*b[1] + ap1*F[1]*b[2]
-
-    @inbounds for ii in 2 : N - 1
+    @inbounds @fastmath  for ii in 2 : N - 1
         b1, b2, b3 = bm1, b[ii], b[ii + 1]
         f = F[ii]
-        b[ii] = 2*ap1*(b1 + b3)*f + b2*(a0 + a*f)
+        b[ii] = a1 * (b1 + b3) * f + b2 * ( a0 + a * f )
         bm1 = b2
     end
 
-    b[N] = b[N] * ( a0 + a*F[N] ) + ap1 * bm1 * Fm1[N - 1] 
+    b[N] = b[N] * ( a0 + a * F[N] ) + a1 * bm1 * F[N] 
 
     return nothing
 end
+"""
+    column_sym_tridiag_muladd!(b::AbstractVector{T},c::AbstractVector{T},
+                                    F::AbstractVector{T}, Fp1::AbstractVector{T}, a0, a, a1,N::Int)  where T
 
+
+fills the vector b += M*c as M = Tridiagonal(F*ap1, a0 + a*F, F*ap1) , N is the length of b
+
+"""
+function column_sym_tridiag_muladd!(b::AbstractVector{T},c::AbstractVector{T},
+                                    F::AbstractVector{T}, a0, a, a1,N::Int)  where T
+
+    (N > 1 && N == length(c) && N == length(b) && N == length(F) ) || throw(DimensionMismatch("incosistent dimentions"))
+
+    b[1] += (a0 + a * F[1]) * c[1] + a1 * F[1] * c[2]
+
+
+    @inbounds @simd for ii in 2 : N - 1   # it is safe to use @simd here since all loops iterations can be run in parallel
+        c1, c2, c3 = c[ii - 1], c[ii], c[ii + 1]
+        f = F[ii]
+        b[ii] += a1*(c1 + c3)*f + c2*(a0 + a*f)
+    end
+
+    b[N] += c[N] * ( a0 + a*F[N] ) + a1 * c[N - 1] * F[N] 
+
+    return nothing
+end
 
 """
     tridiag_vect_prod!(b::AbstractVector{T},Fm1::AbstractVector{T},
@@ -119,20 +157,20 @@ fills the vector b = M*c + b as M = Tridiagonal(Fm1*am1, a0 + a*F, Fp1*ap1) , N 
 """
 function tridiag_muladd!(b::AbstractVector{T},c::AbstractVector{T}, Fm1::AbstractVector{T},
                                     F::AbstractVector{T}, Fp1::AbstractVector{T}, a0, 
-                                    am1, a, ap1,N::Int)  where T
+                                    am1, a, ap1, N::Int)  where T
 
     (N==length(c) && N == length(b) && N == length(F) && N - 1 == length(Fp1) && N - 1 == length(Fm1)) || throw(DimensionMismatch("incosistent dimentions"))
 
 
-    b[1] = (a0 + a*F[1])*c[1] + ap1 * Fp1[1]*c[2]
+    b[1] += (a0 + a*F[1])*c[1] + ap1 * Fp1[1]*c[2]
 
-    @inbounds for ii in 2 : N - 1
+    @inbounds @simd for ii in 2 : N - 1
         c1, c2, c3 = c[ii - 1], c[ii], c[ii + 1]
         f1, f2, f3 = Fm1[ii - 1], F[ii], Fp1[ii] 
-        b[ii] += am1*c1*f1+ c2*(a0 + a*f2) + ap1*c3*f3
+        b[ii] += am1 * c1 * f1+ c2 * (a0 + a * f2) + ap1 * c3 * f3
     end
 
-    b[N] = c[N]*(a0 + a*F[N]) + am1*bm1*Fm1[N - 1] 
+    b[N] += am1 * c[N - 1] * Fm1[N - 1]  +  c[N] * (a0 + a * F[N]) 
 
     return nothing
 end
@@ -236,8 +274,6 @@ end
     #T[N,:] .= BC_dwn_f.(t)#applying lower BC
     dd = dt/(dx*dx)#
     maxFn = 0.0;
-    upper_bc_flag = UpperBC()
-    lower_bc_flag = LowerBC()
     # allocating vectors of column size
     Fm =    Vector{Float64}(undef,N)
     phi_m = Vector{Float64}(undef,N)
@@ -252,9 +288,9 @@ end
             @. phi_m = 0.25 * Ld_f(Tm) #phi  - коэффициент при нелинейной функции
             @. phi_m /= lam_m
 
-            T[1, m + 1] = explicit_bc(upper_bc_flag, upper_bc_type, Tm, BC_up_f, dt*(m - 1), Fm[1], phi_m[1],lam_m[1], dx)
+            T[1, m + 1] = explicit_bc(UPPER_BC, upper_bc_type, Tm, BC_up_f, dt*(m - 1), Fm[1], phi_m[1],lam_m[1], dx)
 
-            for n = 2 : N - 1 #% цикл по координате
+            @inbounds for n = 2 : N - 1 #% цикл по координате
                 r = Fm[n]
                 T[n, m + 1] = explicit_iteration(Fm[n], phi_m[n], T[n - 1, m] , T[n , m], T[n + 1 , m])
                 if  r > maxFn
@@ -262,7 +298,7 @@ end
                 end
             end
 
-            T[end, m + 1] = explicit_bc(lower_bc_flag, lower_bc_type, Tm, BC_dwn_f, dt*(m - 1), Fm[end], phi_m[end],lam_m[end], dx)
+            T[end, m + 1] = explicit_bc(LOWER_BC, lower_bc_type, Tm, BC_dwn_f, dt*(m - 1), Fm[end], phi_m[end],lam_m[end], dx)
         end
         return (T,dx,dt)
     end
@@ -315,51 +351,86 @@ function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi,
     time_scheme::AbstractTimeScheme,
      coordinate_scheme::AbstractCoordinateScheme) error("This scheme is not implemented yet") end
 
-function apply_bc!(direction::AbstractBCDirection)
+"""
+    apply_bc!(dir::AbstractBCDirection, bc_type::AbstractBoundaryCondition, 
+                LHS, b,  F, bc_fun ,  
+                time_scheme::AbstractTimeScheme, coord_scheme::AbstractCoordinateScheme,
+                t, Tm, m, dx, dt, N)
 
-end
+# Arguments
 
-function unified_fd_scheme( C_f, L_f,Ld_f, H, tmax, initT_f, BC_up_f, BC_dwn_f, M, N,
+    - dir - boundary direction (::LowerBC or ::UpperBC)
+    - bc_type - type of boundary conditions (::DirichletBC,::NeumanBC,::RobinBC)
+    - LHS - LHS matrix, can be modified
+    - b - righthand side vector (next step after applying bc is mldivide(LHS,B))
+    - F - vector of properties
+    - bc_fun - boundary conditions function 
+    - time_scheme - time scheme used for LHS (::BFD1, ::BFD2)
+    - coord_scheme - scheme used for second derivative approximation 
+    - t - current time 
+    - Tm - current temperature distribution
+    - m - current iteration
+    - dx - coordinate step 
+    - dt  - timestep
+    - N - total number of coordinate points
+# Retuns 
+
+
+"""
+function apply_bc!(dir::AbstractBCDirection, bc_type::AbstractBoundaryCondition, 
+    LHS, b,  F, bc_fun ,  time_scheme::AbstractTimeScheme, coord_scheme::AbstractCoordinateScheme,
+     t, Tm, m, dx, dt, N) 
+     error("Not implemented") end
+
+function unified_fd_scheme( C_f, L_f,Ld_f, H, tmax, initT_f,
+                                bc_fun_up, 
+                                bc_fun_dwn,
+                                M, N,
                                 upper_bc_type::AbstractBoundaryCondition, 
                                 lower_bc_type::AbstractBoundaryCondition,
-                                lhs_scheme::AbstractTimeScheme,
-                                rhs_scheme::AbstractCoordinateScheme,
+                                time_scheme::AbstractTimeScheme,
+                                coordinate_scheme::AbstractCoordinateScheme,
                                 nln_scheme::AbstractNonLinearPart = EXP_NL(),
                                 props_scheme::AbstractNonLinearPart = EXP_NL()
                 )
         dx = H/(N - 1)
         dt = tmax/(M - 1)
         T = Matrix{Float64}(undef,N,M)# columns - distribution, rows time
-        Tmm1 = @view T[:,1]
+        T1 = @view T[:,1]
         @. T1 = initT_f(0 : dx : H)
 
         dd = dt/(dx*dx)#
 
         # allocating vectors and matrices
         F = Vector{Float64}(undef,N) # properties vector
-        Fm1 =@view Fm[2 : end] 
-        Fp1 = @view Fm[1 : end - 1]
+        Fm1 =@view F[2 : end] 
+        Fp1 = @view F[1 : end - 1]
         phi = Vector{Float64}(undef,N) # nonlinear coefficient vector λ'/λ
         lam = Vector{Float64}(undef,N)
         b = Vector{Float64}(undef,N) # left-hand part 
         D = central_finite_difference(N) # creates finite difference matrix for b vector evaluation
         
-        # allocating left and right matrices
+        # allocating left matrix
         LHS = allocate_tridiagonal(N) # left-hand side matrix 
 
-        for m = 1 : M-1 #% цикл по времени
+        bc_up = BoundaryFunction(bc_fun_up)
+        bc_dwn = BoundaryFunction(bc_fun_dwn)
+
+        for m = 1 : M - 1 #% цикл по времени
             Tm = @view T[:,m] # Tm current time
             t = dt*(m - 1)
-            @. lam = L_f(Tm) # λ
-            @. F = dd*lam/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
-            @. phi = 0.25*Ld_f(Tm)/lam #phi  - λ'/λ
-
-            Tmp1 = @view T[:,m + 1] # Tm+1 next time 
+            @inbounds begin 
+                @. lam = L_f(Tm) # λ
+                @. F = dd*lam/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
+                @. phi = 0.25*Ld_f(Tm)/lam #phi  - λ'/λ
+            end        
+            Tmp1 = @view T[:, m + 1] # Tm+1 next time 
+            Tmm1 = @view T[:, maximum((1, m - 1))] # Tm+1 next time 
             # filling matrix diagonals
-            fill_LHS!(LHS, Fm1, F, Fp1, lhs_type, rhs_type, m)
-            fill_RHS!(b,RHS, D, Tm, Tmm1, Fm1, F, Fp1, phi, lhs_scheme, rhs_scheme)
-            apply_upper_bc!(upper_bc_type, LHS, b,  F,  b, lhs_scheme, rhs_scheme, t, dx, dt,N)
-            apply_lower_bc!(lower_bc_type, LHS, b,  F,  b, lhs_scheme, rhs_scheme, t, dx, dt,N)
+            fill_LHS!(LHS, Fm1, F, Fp1, time_scheme, coordinate_scheme, m)
+            fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, time_scheme, coordinate_scheme)
+            apply_bc!(UPPER_BC, upper_bc_type, bc_up, LHS, b,  F,   time_scheme, coordinate_scheme, t, Tm, m, dx, dt, N)
+            apply_bc!(LOWER_BC, lower_bc_type, bc_dwn, LHS, b,  F,   time_scheme, coordinate_scheme, t, Tm, m, dx, dt, N)
 
             # applying boundary conditions to the LHS
             #=L0[1] = 1.0
@@ -384,83 +455,65 @@ end
 
 
 fill_LHS!(LHS, Fm1, F, Fp1, ::BFD1, ::IMP, _) = fill_tridiag!(LHS,Fm1,F,Fp1,1.0,-1.0,2.0,-1.0)
+
 """
     fill_RHS!(b,RHS, D, Tm, Tmm1, Fm1, F, Fp1, phi, ::BFD1, ::IMP)
 
 Fills RHS vector for BFD1 - IMP scheme
 """
-function fill_RHS!(b,_, D, Tm, Tmm1, Fm1, F, Fp1, phi, ::BFD1, ::IMP)
+function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, ::BFD1, ::IMP)
+
             mul!(b,D,Tm) 
             @. b = b^2
             @. b *= F*phi
             @. b += Tm # Tm + \vec{b}
             return nothing
 end
+
+struct BoundaryFunction{F}
+    fun::F 
+end
+(bc::BoundaryFunction)(x) = bc.fun(x)
+
+# apply_bc!(::AbstractBCDirection,upper_bc_type, LHS, b,  F, bc_fun ,  lhs_scheme, rhs_scheme, t, Tm, m, dx, dt, N)
+function apply_bc!(::UpperBC,::DirichletBC,f::BoundaryFunction, 
+            LHS::Tridiagonal{T,Vector{T}},
+            b,  F,  
+            ::BFD1, ::IMP,
+             t, Tm, m, dx, dt, N) where T
+
+
+            LHS.d[1] = 1.0
+            LHS.du[1] = 0.0
+            b[1] = f(t + dt)  # 1st order BC upper, evaluating bc for Tm+1
+            return nothing
+end
+function apply_bc!(::LowerBC, ::DirichletBC, f:: BoundaryFunction,
+                    LHS::Tridiagonal{T,Vector{T}}, 
+                    b,  F,   
+                    ::BFD1, ::IMP, 
+                    t, Tm, m, dx, dt, N) where T
+
+            LHS.d[N] = 1.0
+            LHS.dl[N - 1] = 0.0
+            b[N] = f(t + dt)  # 1st order BC upper, evaluating bc for Tm+1
+            return nothing
+end
+
 @doc DOC_BFD1_imp_exp_exp
-function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N;
+ function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,
+                 bc_fun_up, bc_fun_dwn, M,N;
                  upper_bc_type::AbstractBoundaryCondition = DirichletBC() , 
-                 lower_bc_type::AbstractBoundaryCondition = NeumanBC())
+                 lower_bc_type::AbstractBoundaryCondition = DirichletBC())
 
-        #=x = range(0,H,N)# сетка по координате
-        t = range(0,tmax,M)# сетка по времени
-        dx = x[2] - x[1]
-        dt = t[2] - t[1]
-        T = Matrix{Float64}(undef,N,M)# columns - distribution, rows time
-        T[:,1] .= initT_f.(x)# applying initial conditions
-        T[1,:] .= BC_up_f.(t)# applying upper BC
-        T[N,:] .= BC_dwn_f.(t)#applying lower BC
-        dd = dt/(dx*dx)#
-        maxFn = 0.0;
-        # allocating vectors of column size
-        Fm = Vector{Float64}(undef,N)
-        phi_m = Vector{Float64}(undef,N)
-        lam_m = Vector{Float64}(undef,N)
-        b = Vector{Float64}(undef,N) =#
-
-        return unified_fd_scheme( C_f, L_f,Ld_f, H, tmax, initT_f, BC_up_f, BC_dwn_f, M, N,
+        (T,dx,dt) = unified_fd_scheme( C_f, L_f,Ld_f,
+                                H, tmax, initT_f, 
+                                bc_fun_up, bc_fun_dwn, M, N,
                                 upper_bc_type::AbstractBoundaryCondition, 
                                 lower_bc_type::AbstractBoundaryCondition,
-                                 BFD1(),
+                                BFD1(),
                                 IMP())
-        #=
-        D = central_finite_difference(N) # creates finite difference matrix for b vector evaluation
-        
-        # allocating left and right matrices
-        
-        L = allocate_tridiagonal(N)
-
-        Fmm1 =@view Fm[2 : end] 
-        Fmp1 = @view Fm[1 : end - 1]
-
-        for m = 1:M-1 #% цикл по времени
-            Tm = @view T[:,m] # Tm current time
-
-            @. lam_m = L_f(Tm) # λ
-            @. Fm = dd*lam_m/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
-            @. phi_m = Ld_f(Tm)/(lam_m*4) #phi  - λ'/λ
-
-            Tmp1 = @view T[:,m + 1] # Tm+1 next time 
-            # filling matrix diagonals
-            fill_LHS!(L, Fmm1, Fm, Fmp1, lhs_type, rhs_type)
-
-            # applying boundary conditions to the LHS
-            L0[1] = 1.0
-            Lp1[1] = 0.0
-            L0[end]= 1.0
-            Lm1[end] =0.0    
-            # evaluating nonlinear term and righthand
-            mul!(b,D,Tm) 
-            @. b = b^2
-            @. b *= Fm*phi_m
-            @. b += Tm # Tm + \vec{b}
-
-            b[1] = Tmp1[1]  # 1st order BC upper
-            b[end] = Tmp1[end]   # 1st order BC lower
-
-
-            ldiv!(Tmp1,L,b) # solving
-        end =#
-   return (T,x,t,maxFn)
+        return (T,dx,dt)
 end
 
 fill_RHS!(M,Fm1,F,Fp1,::BFD1,::CN) = fill_tridiag!(M, Fm1, F, Fp1, 1.0 , 0.5, 1.0, 0.5)
