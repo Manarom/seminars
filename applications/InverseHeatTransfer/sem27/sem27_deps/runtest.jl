@@ -6,6 +6,7 @@ fp1 = @view f[1 : end - 1]
 include("finite_difference_functions.jl")
 using LinearAlgebra,BenchmarkTools
 using Test
+import .OneDHeatTransfer as OD
 M = Tridiagonal(collect(fm1), collect(f), collect(fp1))
 
 b = rand(N)
@@ -23,14 +24,12 @@ am1 = 1.0
 ap1 = 1.0
 a = 1.0
 
-OneDHeatTransfer.tridiag_mul!(b1,fm1,f, fp1, a0, am1, a, ap1,N)
-N > 5 ||@show b1
 
-
-OneDHeatTransfer.column_sym_tridiag_mul!(b2, f, a0, a , ap1, N)
-
-N > 5 ||@show b2
 @testset begin
+    OneDHeatTransfer.tridiag_mul!(b1,fm1,f, fp1, a0, am1, a, ap1,N)
+    N > 5 ||@show b1
+    OneDHeatTransfer.column_sym_tridiag_mul!(b2, f, a0, a , ap1, N)
+    N > 5 ||@show b2
     @test norm(b1 - c) ≈ 0 atol=1e-10
     @test norm(b2 - c) ≈ 0 atol=1e-10
 end
@@ -74,14 +73,15 @@ am1 = 1.0
 ap1 = 1.0
 a = 1.0
 
-OneDHeatTransfer.tridiag_muladd!(q1,b,fm1,f, fp1, a0, am1, a, ap1,N)
-N > 5 ||@show q1
+
+@testset begin
+    OneDHeatTransfer.tridiag_muladd!(q1,b,fm1,f, fp1, a0, am1, a, ap1,N)
+    N > 5 ||@show q1
 
 
-OneDHeatTransfer.column_sym_tridiag_muladd!(q2,b, f, a0, a , ap1, N)
-N > 5 ||@show q2
-
-@testset begin 
+    OneDHeatTransfer.column_sym_tridiag_muladd!(q2,b, f, a0, a , ap1, N)
+    N > 5 ||@show q2
+ 
     @test norm(q1 - q0) ≈ 0 atol=1e-10
     @test norm(q2 - q0) ≈ 0 atol=1e-10    
 end

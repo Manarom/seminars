@@ -38,7 +38,85 @@ struct UpperBC <: AbstractBCDirection end
 const LOWER_BC = LowerBC()
 const UPPER_BC = UpperBC()
 
-const DDD = Ref(Tridiagonal(fill(-1.0, 2),fill(0.0, 3), fill(1.0, 2))) # stores the finite difference matrix 
+const CentralDifference = Ref(Tridiagonal(fill(-1.0, 2),fill(0.0, 3), fill(1.0, 2))) # stores the finite difference matrix 
+
+
+struct BoundaryFunction{F,V, BCtype, BCdirection}
+    fun::F
+    value::V
+    function BoundaryFunction(f::F , ::B , ::D, t) where {F, B <: AbstractBoundaryCondition, D <: AbstractBCDirection} 
+        val = @. f(t)
+        V = typeof(val)
+        new{F,V,B,D}(f,val)
+    end 
+end
+
+(bc::BoundaryFunction)(x) = bc.fun(x)
+
+ni_err() = throw(DomainError("not implemented"))
+abstract type AbstractGrid{N,M,T}  end
+timestep(::AbstractGrid,::Int) = ni_err()
+xstep(::AbstractGrid,::Int) =  ni_err()
+tvalue(::AbstractGrid,::Int) =  ni_err()
+xvalue(::AbstractGrid,::Int) =  ni_err()
+
+
+firstx(::AbstractGrid) = 0.0
+firstt(::AbstractGrid) = 0.0 
+lastx(g::AbstractGrid{N}) where {N} = xvalue(g,N)
+lastt(g::AbstractGrid{N,M}) where {N,M} = tvalue(g,M)
+
+xrange(g::AbstractGrid{N}) where N= range(firstx(g),lastx(g),length = N)
+trange(g::AbstractGrid{N,M}) where {N,M} = range(firstt(g),lastt(g),length = M)
+tpoints(::AbstractGrid{N,M}) where {N,M} = M
+xpoints(::AbstractGrid{N}) where {N}= N
+
+size(::AbstractGrid{N,M}) where {N,M} = (N,M)
+function size(::AbstractGrid{N,M}, d::Int) where {N,M}
+    d < 1 && error("arraysize: dimension out of range")
+    return d == 1 ? N : M 
+end   
+abstract type AbstractGridIterator{T} end
+# iterator over time 
+struct EachTimeStep{T} <: AbstractGridIterator{T}
+    g::T 
+    EachTimeStep(g::T) where T <: AbstractGrid = new{T}(g)
+end
+eachtime(g::AbstractGrid) = EachTimeStep(g)
+Base.length(g::EachTimeStep) = tpoints(getfield(g,:g))
+Base.iterate(itr::EachTimeStep) = (firstt(itr.g) , 2)
+Base.iterate(itr::EachTimeStep,state::Int) = 1 <= state <= tpoints(itr.g) ? (tvalue(itr.g, state), state + 1) : nothing
+
+struct EachXStep{T} <: AbstractGridIterator{T}
+    g::T 
+    EachXStep(g::T) where T <: AbstractGrid = new{T}(g)
+end
+eachx(g::AbstractGrid) = EachXStep(g)
+Base.length(g::EachXStep) = xpoints(getfield(g,:g))
+
+Base.iterate(itr::EachXStep) = (firstx(itr.g) , 2)
+Base.iterate(itr::EachXStep, state::Int) = (1 <= state && state <= xpoints(itr.g)) ? (xvalue(itr.g, state), state + 1) : nothing
+
+function Base.map!(f, dest::AbstractVector, itr::AbstractGridIterator )
+    @assert length(dest) == length(itr)    
+    for (i,x) in enumerate(itr)
+        @inbounds dest[i] = f(x)
+    end
+    return dest
+end
+struct UniformGrid{N,M,T} <: AbstractGrid{N,M,T}
+    dx::T
+    dt::T
+    UniformGrid(xmax::T, tmax::T,::Val{N},::Val{M}) where {T,N,M} = new{N,M,T}(xmax/( N  - 1) , tmax/(M - 1) ) 
+end
+
+timestep(g::UniformGrid, ::Int) = g.dt
+xstep(g::UniformGrid, ::Int) = g.dx 
+tvalue(g::UniformGrid, m::Int) = g.dt * (m - 1)
+xvalue(g::UniformGrid, n::Int) = g.dx * (n - 1)
+ 
+
+# Base.iterate(g::EachTimeStep) = 
 
 
 """
@@ -311,10 +389,10 @@ allocate_tridiagonal(N::Int,T::DataType = Float64) = Tridiagonal(Vector{T}(undef
 Returns central finite difference first order derivative matrix 
 """
 function central_finite_difference(n)
-    if size(DDD[],1) != n
-         DDD[] = Tridiagonal(fill(-1.0, n-1),fill(0.0, n), fill(1.0, n-1))   
+    if size(CentralDifference[],1) != n
+         CentralDifference[] = Tridiagonal(fill(-1.0, n-1),fill(0.0, n), fill(1.0, n-1))   
     end  
-    return  DDD[]
+    return  CentralDifference[]
 end
 
 
@@ -349,7 +427,7 @@ coordinate_scheme - coordinate scheme
 """
 function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, 
     time_scheme::AbstractTimeScheme,
-     coordinate_scheme::AbstractCoordinateScheme) error("This scheme is not implemented yet") end
+    coordinate_scheme::AbstractCoordinateScheme) error("This scheme is not implemented yet") end
 
 """
     apply_bc!(dir::AbstractBCDirection, bc_type::AbstractBoundaryCondition, 
@@ -382,24 +460,22 @@ function apply_bc!(dir::AbstractBCDirection, bc_type::AbstractBoundaryCondition,
      t, Tm, m, dx, dt, N) 
      error("Not implemented") end
 
-function unified_fd_scheme( C_f, L_f,Ld_f, H, tmax, initT_f,
-                                bc_fun_up, 
-                                bc_fun_dwn,
-                                M, N,
+function unified_fd_scheme( C_f, L_f,Ld_f, initT_f, 
+                                g::UniformGrid{N,M,DType},
+                                bc_up::BoundaryFunction, 
+                                bc_dwn::BoundaryFunction,
                                 upper_bc_type::AbstractBoundaryCondition, 
                                 lower_bc_type::AbstractBoundaryCondition,
                                 time_scheme::AbstractTimeScheme,
                                 coordinate_scheme::AbstractCoordinateScheme,
                                 nln_scheme::AbstractNonLinearPart = EXP_NL(),
                                 props_scheme::AbstractNonLinearPart = EXP_NL()
-                )
-        dx = H/(N - 1)
-        dt = tmax/(M - 1)
-        T = Matrix{Float64}(undef,N,M)# columns - distribution, rows time
+                ) where {N,M,DType}
+        T = Matrix{DType}(undef,N,M)# columns - distribution, rows time
         T1 = @view T[:,1]
-        @. T1 = initT_f(0 : dx : H)
+        map!(initT_f,T1,eachx(g))
 
-        dd = dt/(dx*dx)#
+        dd = g.dt/(g.dx*g.dx)#
 
         # allocating vectors and matrices
         F = Vector{Float64}(undef,N) # properties vector
@@ -413,12 +489,8 @@ function unified_fd_scheme( C_f, L_f,Ld_f, H, tmax, initT_f,
         # allocating left matrix
         LHS = allocate_tridiagonal(N) # left-hand side matrix 
 
-        bc_up = BoundaryFunction(bc_fun_up)
-        bc_dwn = BoundaryFunction(bc_fun_dwn)
-
         for m = 1 : M - 1 #% цикл по времени
             Tm = @view T[:,m] # Tm current time
-            t = dt*(m - 1)
             @inbounds begin 
                 @. lam = L_f(Tm) # λ
                 @. F = dd*lam/C_f(Tm) # Fm - (dx^-2)*dt*Cp/λ
@@ -428,9 +500,12 @@ function unified_fd_scheme( C_f, L_f,Ld_f, H, tmax, initT_f,
             Tmm1 = @view T[:, maximum((1, m - 1))] # Tm+1 next time 
             # filling matrix diagonals
             fill_LHS!(LHS, Fm1, F, Fp1, time_scheme, coordinate_scheme, m)
+
             fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, time_scheme, coordinate_scheme)
-            apply_bc!(UPPER_BC, upper_bc_type, bc_up, LHS, b,  F,   time_scheme, coordinate_scheme, t, Tm, m, dx, dt, N)
-            apply_bc!(LOWER_BC, lower_bc_type, bc_dwn, LHS, b,  F,   time_scheme, coordinate_scheme, t, Tm, m, dx, dt, N)
+            
+            apply_bc!(bc_up, LHS, b,  F,   time_scheme, coordinate_scheme, Tm, g, m)
+            
+            apply_bc!(bc_dwn, LHS, b,  F,   time_scheme, coordinate_scheme, Tm, g, m)
 
             # applying boundary conditions to the LHS
             #=L0[1] = 1.0
@@ -470,33 +545,38 @@ function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, ::BFD1, ::IMP)
             return nothing
 end
 
-struct BoundaryFunction{F}
-    fun::F 
-end
-(bc::BoundaryFunction)(x) = bc.fun(x)
+
+
 
 # apply_bc!(::AbstractBCDirection,upper_bc_type, LHS, b,  F, bc_fun ,  lhs_scheme, rhs_scheme, t, Tm, m, dx, dt, N)
-function apply_bc!(::UpperBC,::DirichletBC,f::BoundaryFunction, 
+function apply_bc!(f::BoundaryFunction{Ftype,V,BCtype,BCdirection}, 
             LHS::Tridiagonal{T,Vector{T}},
-            b,  F,  
-            ::BFD1, ::IMP,
-             t, Tm, m, dx, dt, N) where T
+            b,  _,  
+            ::BFD1, ::IMP, # time_scheme, coordinate_scheme
+            Tm,
+            g::UniformGrid,
+            m::Int  # current time step index
+            ) where {T,Ftype,V, BCtype <: DirichletBC, BCdirection <: UpperBC}
 
 
             LHS.d[1] = 1.0
             LHS.du[1] = 0.0
-            b[1] = f(t + dt)  # 1st order BC upper, evaluating bc for Tm+1
+            b[1] = f(m)  # 1st order BC upper, evaluating bc for Tm+1
             return nothing
 end
-function apply_bc!(::LowerBC, ::DirichletBC, f:: BoundaryFunction,
-                    LHS::Tridiagonal{T,Vector{T}}, 
-                    b,  F,   
-                    ::BFD1, ::IMP, 
-                    t, Tm, m, dx, dt, N) where T
+function apply_bc!(f::BoundaryFunction{Ftype,V,BCtype,BCdirection}, 
+            LHS::Tridiagonal{T,Vector{T}},
+            b,  _,  
+            ::BFD1, ::IMP, # time_scheme, coordinate_scheme
+            Tm,
+            g::UniformGrid{N},
+            m::Int # current time step index
+            ) where {T,N,Ftype,V, BCtype <: DirichletBC, BCdirection <: LowerBC}
 
             LHS.d[N] = 1.0
             LHS.dl[N - 1] = 0.0
-            b[N] = f(t + dt)  # 1st order BC upper, evaluating bc for Tm+1
+           
+            b[N] = f(m)  # 1st order BC upper, evaluating bc for Tm+1
             return nothing
 end
 
@@ -505,6 +585,9 @@ end
                  bc_fun_up, bc_fun_dwn, M,N;
                  upper_bc_type::AbstractBoundaryCondition = DirichletBC() , 
                  lower_bc_type::AbstractBoundaryCondition = DirichletBC())
+
+        bc_up = BoundaryFunction(bc_fun_up)
+        bc_dwn = BoundaryFunction(bc_fun_dwn)
 
         (T,dx,dt) = unified_fd_scheme( C_f, L_f,Ld_f,
                                 H, tmax, initT_f, 

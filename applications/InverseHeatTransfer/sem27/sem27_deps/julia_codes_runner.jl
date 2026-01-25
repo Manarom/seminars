@@ -48,30 +48,7 @@ OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der,
 (T2,) = OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 plot(T2,st=:surface)
 plot(T2 .-T,st=:surface)
-#=
-(TCN,) = OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, 
-            H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-
-plot(T2 .- TCN,st=:surface)
-
-#@benchmark OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-@benchmark OneDHeatTransfer.BFD1_CN_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-@benchmark OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-@profview OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N, upper_bc_type = u_BC_type)
-=#
-#=
-@benchmark OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-@profview OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
 
-
-unified_fd_scheme( C_f, L_f,Ld_f,
-                                H, tmax, initT_f, 
-                                bc_fun_up, bc_fun_dwn, M, N,
-                                upper_bc_type::AbstractBoundaryCondition, 
-                                lower_bc_type::AbstractBoundaryCondition,
-                                BFD1(),
-                                IMP())
-
- @profview_allocs OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
- =#
+@benchmark OneDHeatTransfer.BFD1_exp_exp_exp($Cp_fun, $lam_fun,$lam_der, H, tmax,$initT_f,$BC_up_f,$BC_dwn_f,M,N)
+@benchmark OneDHeatTransfer.BFD1_imp_exp_exp($Cp_fun, $lam_fun,$lam_der, H, tmax,$initT_f,$BC_up_f,$BC_dwn_f,M,N)
