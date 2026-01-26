@@ -15,10 +15,10 @@ plot(b)
 @code_warntype map!(sin,bw,OD.eachtime(g))
 
 f_trial = t -> t/1000.0
-bc_fun = OD.BoundaryFunction(f_trial,OD.DirichletBC(),OD.UpperBC(),collect(100.0:10.0:1000))
+bc_fun = OD.BoundaryFunction(f_trial,collect(100.0:10.0:1000),OD.DirichletBC(),OD.UpperBC())
 @btime bc_fun(1000.0)
 @btime bc_fun(10)
 
-bc_fun_rob = OD.BoundaryFunction(f_trial,OD.RobinBC(),OD.UpperBC(),collect(100.0:10.0:1000))
+bc_fun_rob = OD.BoundaryFunction(f_trial,collect(100.0:10.0:1000),OD.RobinBC(),OD.UpperBC())
 @btime bc_fun_rob(1000.0)
 bc_fun_rob(10)

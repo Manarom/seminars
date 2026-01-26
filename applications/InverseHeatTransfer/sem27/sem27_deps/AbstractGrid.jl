@@ -3,7 +3,7 @@ timestep(::AbstractGrid,::Int) = ni_err()
 xstep(::AbstractGrid,::Int) =  ni_err()
 tvalue(::AbstractGrid,::Int) =  ni_err()
 xvalue(::AbstractGrid,::Int) =  ni_err()
-
+datatype(::AbstractGrid{N,M,T}) where {N,M,T} = T
 
 firstx(::AbstractGrid) = 0.0
 firstt(::AbstractGrid) = 0.0 

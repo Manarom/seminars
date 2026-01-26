@@ -5,7 +5,6 @@ using AllocCheck#, Revise
 include("finite_difference_functions.jl")
 
 lam_pars = [0.44]
-lam_poly = Polynomials.ImmutablePolynomial(lam_pars)
 lam_fun = Polynomials.ImmutablePolynomial(lam_pars) #T -> lam_poly(T) # теплопроводность
 lam_der_poly = Polynomials.ImmutablePolynomial( length(lam_pars)> 1 ? derivative(lam_poly) : [0.0])
 lam_der = Polynomials.ImmutablePolynomial( lam_der_poly)#T->lam_der_poly(T)#;% производная теплопроводности
@@ -45,10 +44,25 @@ OneDHeatTransfer.BFD1_exp_exp_exp(Cp_fun, lam_fun,lam_der,
                         BC_up_f,BC_dwn_f,
                         M,N, upper_bc_type = u_BC_type, lower_bc_type = l_BC_type)
 
-(T2,g,bc_up,bc_dwn) = OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
-plot(T2,st=:surface)
-plot(T2 .-T,st=:surface)
+#(T2,g,bc_up,bc_dwn) = OneDHeatTransfer.BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
+
+#
+
+
+
+p = OneDHeatTransfer.HeatTransferProblem(Cp_fun,lam_fun,lam_der,initT_f, 
+                           H,N, tmax,M,
+                            BC_up_f, u_BC_type,
+                            BC_dwn_f, l_BC_type)
+
+OneDHeatTransfer.unified_fd_solver!(p,OneDHeatTransfer.BFD1(),OneDHeatTransfer.IMP())
+plot(p.T,st=:surface)
+
+plot(p.T .- T,st=:surface)
+
 
 
 @benchmark OneDHeatTransfer.BFD1_exp_exp_exp($Cp_fun, $lam_fun,$lam_der, H, tmax,$initT_f,$BC_up_f,$BC_dwn_f,M,N)
-@benchmark OneDHeatTransfer.BFD1_imp_exp_exp($Cp_fun, $lam_fun,$lam_der, H, tmax,$initT_f,$BC_up_f,$BC_dwn_f,M,N)
+@benchmark OneDHeatTransfer.unified_fd_solver!($p,OneDHeatTransfer.BFD1(),OneDHeatTransfer.IMP())
+
+#BFD1_imp_exp_exp(Cp_fun, lam_fun,lam_der, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
