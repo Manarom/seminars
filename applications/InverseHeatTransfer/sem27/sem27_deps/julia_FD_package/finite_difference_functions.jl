@@ -1,7 +1,7 @@
 
 module OneDHeatTransfer
 
-using LinearAlgebra,NonlinearSolvers, StaticArrays
+using LinearAlgebra,NonlinearSolvers, StaticArrays, LaTeXStrings
 
 using AllocCheck
 
@@ -25,80 +25,12 @@ struct IMP_NL <: AbstractNonLinearPart end # implicit non - linear part
 
 
 # boundaries conditions types 
-abstract type AbstractBoundaryCondition end
-struct DirichletBC <: AbstractBoundaryCondition end
-struct NeumanBC <: AbstractBoundaryCondition end
-struct RobinBC <: AbstractBoundaryCondition end
 
-# boundary type upper or lower 
-abstract type AbstractBCDirection end
-struct LowerBC <: AbstractBCDirection end
-struct UpperBC <: AbstractBCDirection end
-
-const LOWER_BC = LowerBC()
-const UPPER_BC = UpperBC()
 
 const CentralDifference = Ref(Tridiagonal(fill(-1.0, 2),fill(0.0, 3), fill(1.0, 2))) # stores the finite difference matrix 
 
-abstract type AbstractHTFunction{F,V} end
 
-"""
-    (bc::AbstractHTFunction)(x)
-
-Default implementation uses function call 
-"""
-function (bc::AbstractHTFunction)(x)
-    bc.fun(x)
-end
-struct PhysicalPropertyFunction{F,V} <: AbstractHTFunction{F,V} 
-    fun::F
-    params::V
-    function PhysicalPropertyFunction(f , p::V = nothing) where V
-        fun = t -> f(t)
-        F = typeof(fun)
-        new{F,V}(fun,p)
-    end 
-end
-struct InitialTFunction{F,V} <: AbstractHTFunction{F,V} 
-    fun::F
-    value::V
-    function InitialTFunction(f , t) 
-        fun = t -> f(t)
-        F = typeof(fun)
-        val = @. fun(t)
-        V = typeof(val)
-        new{F,V}(fun,val)
-    end 
-end
-(init::InitialTFunction)(m::Int)  = init.value[m]
-
-struct BoundaryFunction{F, V, BCtype, BCdirection} <:AbstractHTFunction{F,V}
-    fun::F
-    value::V
-    function BoundaryFunction(f , t, ::B , ::D) where {B  <: BCtype, D <: AbstractBCDirection} where BCtype <: Union{DirichletBC,NeumanBC}
-        fun = t -> f(t)
-        val = @. fun(t)
-        V = typeof(val)
-        F = typeof(fun)
-        new{F,V,B,D}(fun,val)
-    end 
-    function BoundaryFunction(f, t, ::B , ::D) where { B <: BCtype, D <: AbstractBCDirection} where BCtype <: RobinBC
-        val = nothing
-        V = typeof(val)
-        fun = t -> f(t)
-        F = typeof(fun)
-        new{F,V,B,D}(fun,val)
-    end 
-end
-
-
-"""
-    (bc::BoundaryFunction{F,BCtype} )(m::Int) where {F,BCtype <: Union{DirichletBC,NeumanBC}}
-
-For DirichletBC and NeumanBC the value of BC can be evaluated in advance and collected by index
-"""
-(bc::BoundaryFunction{F,V,BCtype} )(m::Int) where {F,V,BCtype <: Union{DirichletBC,NeumanBC}} = bc.value[m]
-
+include("FunctionsWrappers.jl")
 include("AbstractGrid.jl")
 include("TridiagFunctions.jl")
 
@@ -117,15 +49,24 @@ const SCHEME_NAMES = [:BFD1_EXP_EXP_EXP,
                       :BFD1_CN_EXP_EXP]
 
 export BFD1_EXP_EXP_EXP,BFD1_IMP_EXP_EXP,BFD1_CN_EXP_EXP
+abstract type AbstractSolverScheme end
+abstract type AbstractFDScheme{T,X,N,P} <: AbstractSolverScheme end
+"""
+Flag type FDSolverScheme{T,X,N,P} 
+with parameters :
+T - time derivative approximation BFD1 or BFD2
+X - coordinate second derivative approximation 
 
-abstract type AbstractSolverScheme{T,X,N,P}end
-struct SolverScheme{T,X,N,P} <: AbstractSolverScheme{T,X,N,P}
-    SolverScheme(::T,::X,::N,::P) where {T<: AbstractTimeScheme,
-                                            X <: AbstractCoordinateScheme,
-                                             N <: AbstractNonLinearPart,
-                                             P <: AbstractNonLinearPart} = new{T,X,N,P}()
+
+"""
+struct FDSolverScheme{T,X,N,P} <: AbstractFDScheme{T,X,N,P}
+    FDSolverScheme(::T,::X,::N,::P) where {T <: AbstractTimeScheme,
+                                         X <: AbstractCoordinateScheme,
+                                         N <: AbstractNonLinearPart,
+                                         P <: AbstractNonLinearPart} = new{T,X,N,P}()
 end
-const BFD1_IMP_EXP_EXP = SolverScheme{BFD1,IMP,EXP_NL,EXP_NL}
+
+const BFD1_CN_EXP_EXP = FDSolverScheme{BFD1,CN,EXP_NL,EXP_NL}
 
 # generating docstrings
 for d in SCHEME_NAMES
@@ -159,37 +100,42 @@ end
 
 
 """
-    fill_LHS!(LHS, Fm1, F, Fp1, lhs_type, rhs_type)
+    fill_LHS!(LHS, Fm1, F, Fp1, m, solver_scheme, problem)
 
-Fills left-hand side of f-d scheme equation
+Fills left-hand side of finite difference scheme inside the loop over time 
 
-LHS - matrix to be filled 
-Fm1 - Fm-1 lower diagonal fourier number vector
-F -   Fm  - main diagonal fourier number vector
-Fp1 - Fm+1 upper diagonal fourier number vector 
-lhs_type - left-hand side f-d scheme
-rhs_type - right-hand side f-d scheme
-m - iteration number
-"""
-function fill_LHS!(LHS, Fm1, F, Fp1, lhs_type, rhs_type, m) error("This scheme is not implemented yet") end
-
+# Arguments
+    - LHS - matrix to be filled 
+    - Fm1 - Fm-1 lower diagonal fourier number vector (view of F[2 : M])
+    - F -   Fm  - main diagonal fourier number vector (vector)
+    - Fp1 - Fm+1 upper diagonal fourier number vector (view of F[1 : M - 1])
+    - m - current iteration number
+    - solver_scheme - see [`FDSolverScheme`](@ref)
+    - problem  - PDE problem see [`HeatTransferProblem`](@ref)
 
 """
-    fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, lhs_type, rhs_type)
+function fill_LHS!(LHS, Fm1, F, Fp1, m, solver_scheme, problem) ni_err() end
 
-b - left-hand side vector to be filled (modified)
-D - finite difference matrix 
-Tm - temperature distribution for m'th timestep
-Tmm1 - m-1 th timestep temperature distribution
-Fm1, F, Fp1 - are  Fm-1 , Fm , Fm+1 elements of fourier number vector (views of the same vector)
-phi - nonlinear coefficients vector 
-time_scheme - type of time scheme 
-coordinate_scheme - coordinate scheme 
 
 """
-function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, 
-    time_scheme::AbstractTimeScheme,
-    coordinate_scheme::AbstractCoordinateScheme) error("This scheme is not implemented yet") end
+    fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, solver_scheme::AbstractSolverScheme, problem::AbstractFDScheme)
+
+Fills righthand side of finite difference scheme inside the loop over time
+
+# Arguments
+    - b - righthand side vector 
+    - D - finite difference matrix
+    - Tm - current step temperature distribution view
+    - Tmm1 - previous step temperature distribution view
+    - Fm1 - Fm-1 lower diagonal fourier number vector (view of F[2 : N, m])
+    - F -   Fm  - main diagonal fourier number vector (view F[:, m])
+    - Fp1 - Fm+1 upper diagonal fourier number vector (view of F[1 : N - 1, m])
+    - m - current iteration number
+    - solver_scheme - see [`FDSolverScheme`](@ref)
+    - problem  - PDE problem see [`HeatTransferProblem`](@ref)
+
+"""
+function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, solver_scheme::AbstractSolverScheme, problem::AbstractFDScheme) ni_err() end
 
 """
     apply_bc!(dir::AbstractBCDirection, bc_type::AbstractBoundaryCondition, 
@@ -197,60 +143,78 @@ function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi,
                 time_scheme::AbstractTimeScheme, coord_scheme::AbstractCoordinateScheme,
                 t, Tm, m, dx, dt, N)
 
+Applies boundary conditions to the finite - difference scheme matricies
+
 # Arguments
-
-    - dir - boundary direction (::LowerBC or ::UpperBC)
-    - bc_type - type of boundary conditions (::DirichletBC,::NeumanBC,::RobinBC)
+    - LHS - lefthand side matrix reference (can be modified for some schemes)
+    - b - righthand side vector, BC modifies the first of the last element accroding to the bc_fun sprcification
+    - bc_fun - boundary conditions function see [`BoundaryFunction`](@ref)
     - LHS - LHS matrix, can be modified
-    - b - righthand side vector (next step after applying bc is mldivide(LHS,B))
-    - F - vector of properties
-    - bc_fun - boundary conditions function 
-    - time_scheme - time scheme used for LHS (::BFD1, ::BFD2)
-    - coord_scheme - scheme used for second derivative approximation 
-    - t - current time 
-    - Tm - current temperature distribution
-    - m - current iteration
-    - dx - coordinate step 
-    - dt  - timestep
-    - N - total number of coordinate points
-# Retuns 
-
+    - F  - main diagonal fourier number vector (view F[:, m])   
+    - Tm - current step temperature distribution view
+    - phi - non-linear term coefficient vector
+    - m -  current time iteration index
+    - solver_scheme - see [`FDSolverScheme`](@ref)
+    - problem  - PDE problem see [`HeatTransferProblem`](@ref)
+"""
+function apply_bc!(LHS, b, bc_fun,  F, Tm, phi ,   m,  solver_scheme, problem)  ni_err() end
 
 """
-function apply_bc! end
+    HeatTransferProblem(C_fun, L_fun, Ld_fun, initT_fun,
+                                H::D, N::Int,
+                                tmax::D, M::Int,
+                                bc_fun_up, upper_bc_type::AbstractBoundaryCondition,
+                                bc_fun_dwn, lower_bc_type::AbstractBoundaryCondition,
+                                ::Type{DT}) where {D, DT <:Number}
 
-"""
-        func(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
 
-    Function solves the one dimentional heat transfer equation:
+Formulates the problem to solve the following equation:
 
     (C/λ)*Tₜ= Tₓₓ + (λ'/λ)*(Tₓ)²
-    T(0,t) = f(t)
-    T(H,t) = g(t)
     T(x,0) = Tᵢ(x)
 
-    where
-    λ - thermal conductivity, Kg/m^3 * J/(Kg*K)    
-    C - thermal capacity,    C = Cp*ρ    Cp - specific heat, J/(kg*K), ρ - density, kg/m³  
-    Tₜ = ∂T/∂t  
-    Tₓ = ∂T/∂x
-    Tₓₓ = ∂²T/∂x² 
+where
+λ - thermal conductivity, Kg/m^3 * J/(Kg*K)    
+C - thermal capacity,    C = Cp*ρ    Cp - specific heat, J/(kg*K), ρ - density, kg/m³  
+Tₜ = ∂T/∂t  
+Tₓ = ∂T/∂x
+Tₓₓ = ∂²T/∂x² 
 
-    # Arguments
+Dirichlet conditions:
+    T(0,t) = f(t)
+    T(H,t) = g(t)
 
-    - C_f - thermal capacity , (cp*Ro) (Kg/m^3 * J/(Kg*K))
-    - L_f - thermal conductivity, W/m*K
-    - Ld_f - thermal conductivity derivative with respect to temperature
+Dirichlet conditions:
+    Tₓ(0,t) = f(t)
+    Tₓ(H,t) = g(t)
+
+Robin conditions:
+    Tₓ(0,t) = f(T)
+    Tₓ(H,t) = g(T)
+
+        HeatTransferProblem(C_fun, L_fun, Ld_fun, initT_fun,
+                                H::D, N::Int,
+                                tmax::D, M::Int,
+                                bc_fun_up, upper_bc_type::AbstractBoundaryCondition,
+                                bc_fun_dwn, lower_bc_type::AbstractBoundaryCondition,
+                                ::Type{DT}) where {D, DT <:Number}
+# Arguments
+
+    - C_fun - thermal capacity , (cp*Ro) (Kg/m^3 * J/(Kg*K))
+    - L_fun - thermal conductivity, W/m*K
+    - Ld_fun - thermal conductivity derivative with respect to temperature
+    - initT_fun - function to evaluate the initial temperature distribution  
     - H - thickness, m
+    - N - number of coordinate nods
     - tmax - time interval, s
-    - initT_f - function to evaluate the initial temperature distribution
-    - BC_up_f - upper BC function
-    - BC_dwn_f - lower BC function 
-    - N - points for coordinate
-    - M - points for time
-
+    - M - number of time nodes
+    - bc_fun_up - upper boundary conditions function
+    - upper_bc_type - type of upper BC: DirichletBC, NeumanBC or RobinBC
+    - bc_fun_dwn - lower boundary conditions function
+    - lower_bc_type - type of lower BC: DirichletBC, NeumanBC or RobinBC
+    - DT - temperature data type 
 """
-struct HeatTransferProblem{CF,LF,LDF,ITF, G, BCU, BCD,TMATtype}
+struct HeatTransferProblem{D, CF,LF,LDF,ITF, G, BCU, BCD,TMATtype} # D is for temperature data type
     C_f::CF 
     L_f::LF
     Ld_f::LDF
@@ -259,82 +223,99 @@ struct HeatTransferProblem{CF,LF,LDF,ITF, G, BCU, BCD,TMATtype}
     bc_up::BCU
     bc_dwn::BCD
     T::TMATtype
-    """
-    HeatTransferProblem(C_fun, L_fun, Ld_fun, initT_fun,
+
+    function HeatTransferProblem(C_fun, L_fun, Ld_fun, initT_fun,
                                 H::D, N::Int,
                                 tmax::D, M::Int,
                                 bc_fun_up, upper_bc_type::AbstractBoundaryCondition,
-                                bc_fun_dwn, lower_bc_type::AbstractBoundaryCondition) where D
+                                bc_fun_dwn, lower_bc_type::AbstractBoundaryCondition,
+                                ::Type{DT}) where {D, DT <:Number}
 
-    # Arguments
+        @assert isconcretetype(DT) "Functions return type should be concrete!"
 
-    - C_f - thermal capacity , (cp*Ro) (Kg/m^3 * J/(Kg*K))
-    - L_f - thermal conductivity, W/m*K
-    - Ld_f - thermal conductivity derivative with respect to temperature
-    - H - thickness, m
-    - tmax - time interval, s
-    - initT_f - function to evaluate the initial temperature distribution
-    - bc_fun_up - upper BC function
-    - upper_bc_type - upper BC type
-    - bc_fun_dwn - lower BC function 
-    - lower_bc_type -lower BC type
-    
-"""
-function HeatTransferProblem(C_fun, L_fun, Ld_fun, initT_fun,
-                                H::D, N::Int,
-                                tmax::D, M::Int,
-                                bc_fun_up, upper_bc_type::AbstractBoundaryCondition,
-                                bc_fun_dwn, lower_bc_type::AbstractBoundaryCondition) where D
-
-        C_f = PhysicalPropertyFunction(C_fun)
-        CF = typeof(C_f)
-        L_f = PhysicalPropertyFunction(L_fun)
-        LF = typeof(L_f)
-        Ld_f = PhysicalPropertyFunction(Ld_fun)
-        LDF = typeof(Ld_f)
+        @assert N >= 2 "Value of N must be greater than 2"
+        @assert M >= 2 "Value of M must be greater than 2"
         g = UniformGrid(H,tmax,Val(N),Val(M))
         G = typeof(g)
         time_range = trange(g)
-        initT_f = InitialTFunction(initT_fun,time_range)
+
+
+        C_f = PhysicalPropertyFunction(C_fun, nothing, DT)
+        CF = typeof(C_f)
+        L_f = PhysicalPropertyFunction(L_fun, nothing, DT)
+        LF = typeof(L_f)
+        Ld_f = PhysicalPropertyFunction(Ld_fun, nothing, DT)
+        LDF = typeof(Ld_f)
+        initT_f = InitialTFunction(initT_fun, time_range, DT)
         ITF = typeof(initT_f)
-        TMATtype = Matrix{datatype(g)}
+
+
+        TMATtype = Matrix{DT}
         T = TMATtype(undef,N,M)
-        bc_up = BoundaryFunction(bc_fun_up,time_range, upper_bc_type, UPPER_BC)
+        bc_up = BoundaryFunction(bc_fun_up,time_range, upper_bc_type, UPPER_BC,DT)
         BCU = typeof(bc_up)
-        bc_dwn = BoundaryFunction(bc_fun_dwn, time_range,lower_bc_type, LOWER_BC)
+        bc_dwn = BoundaryFunction(bc_fun_dwn, time_range,lower_bc_type, LOWER_BC, DT)
         BCD = typeof(bc_dwn)
-        return new{CF,LF,LDF,ITF, G, BCU, BCD, TMATtype}(C_f, L_f, Ld_f, initT_f, g, bc_up, bc_dwn, T)
+        return new{DT, CF, LF, LDF, ITF, G, BCU, BCD, TMATtype}(C_f, L_f, Ld_f, initT_f, g, bc_up, bc_dwn, T)
     end
 end
-
-function unified_fd_solver!( problem::HeatTransferProblem{CF,LF,LDF,ITF, G, BCU, BCD, TMATtype},
-                                    solver_scheme::SolverScheme{TS, CS, NLS, PS} ) where {CF,LF,LDF,ITF, G<:UniformGrid{N,M,DType}, BCU, BCD, 
-                                    TMATtype<: AbstractMatrix{DType},  TS <: AbstractTimeScheme,
+timestep(p::HeatTransferProblem, m::Int = 1) = timestep(p.grid,m)
+xstep(p::HeatTransferProblem, m::Int = 1) = xstep(p.grid,m)
+thermal_diffusivity(p::HeatTransferProblem{D}, T::D ) where D = p.L_f(T)/p.C_f(T)
+thermal_conductivity(p::HeatTransferProblem{D}, T::D ) where D = p.L_f(T)
+thermal_conductivity_derivative(p::HeatTransferProblem{D}, T::D ) where D = p.Ld_f(T)
+thermal_capacity(p::HeatTransferProblem{D}, T::D ) where D = p.C_f(T)
+lower_boundary_condition(p::HeatTransferProblem{D}, t::D) where D  = p.bc_dwn(t)
+upper_boundary_condition(p::HeatTransferProblem{D}, t::D) where D  = p.bc_up(t)
+"""
+    unified_fd_solver!( problem::HeatTransferProblem{DT, CF, LF, LDF, ITF, G, BCU, BCD, TMATtype},
+                                    solver_scheme::FDSolverScheme{TS, CS, NLS, PS} = BFD1_IMP_EXP_EXP) where {DT, CF,LF,LDF,ITF, 
+                                    G <:UniformGrid{N,M}, BCU, BCD, 
+                                    TMATtype <: AbstractMatrix{DT},  
+                                    TS <: AbstractTimeScheme,
                                     CS <: AbstractCoordinateScheme,
                                     NLS <: EXP_NL,
-                                    PS <: EXP_NL} where {N,M,DType}
+                                    PS <: EXP_NL} where {N, M}
+                        
+Unified solver for 1d heat transfer problems with various schemes
+
+# Arguments
+
+- problem - heat transfer problem object see [`HeatTransferProblem`](@ref)
+- solver_scheme - scheme of solving see [`FDSolverScheme`](@ref) 
+
+
+"""
+function unified_fd_solver!( problem::HeatTransferProblem{DT, CF, LF, LDF, ITF, G, BCU, BCD, TMATtype},
+                                    solver_scheme::FDSolverScheme{TS, CS, NLS, PS} = BFD1_IMP_EXP_EXP) where {DT, CF,LF,LDF,ITF, 
+                                    G <:UniformGrid{N,M}, BCU, BCD, 
+                                    TMATtype <: AbstractMatrix{DT},  
+                                    TS <: AbstractTimeScheme,
+                                    CS <: AbstractCoordinateScheme,
+                                    NLS <: EXP_NL,
+                                    PS <: EXP_NL} where {N, M}
         #T = Matrix{DType}(undef,N,M)# columns - distribution, rows time
         T = problem.T
         T1 = @view T[:,1]
-        g = problem.grid
+
         map!(problem.initT_f, T1, eachx(problem.grid))
 
         dd = problem.grid.dt/(problem.grid.dx * problem.grid.dx)#
 
         # allocating vectors and matrices
-        F = Vector{DType}(undef,N) # properties vector
+        F = Vector{DT}(undef,N) # properties vector
         Fm1 = @view F[2 : end] 
         Fp1 = @view F[1 : end - 1]
-        phi = Vector{DType}(undef,N) # nonlinear coefficient vector λ'/λ
-        lam = Vector{DType}(undef,N)
-        b = Vector{DType}(undef,N) # left-hand part 
+        phi = Vector{DT}(undef,N) # nonlinear coefficient vector λ'/λ
+        lam = Vector{DT}(undef,N)
+        b = Vector{DT}(undef,N) # left-hand part 
         D = central_finite_difference(N) # creates finite difference matrix for b vector evaluation
         #(C_f, L_f, Ld_f) = (,, )
         (bc_up, bc_dwn) = (problem.bc_up, problem.bc_dwn)
         Tm = T1
-
+        Tmm1 = T1
         # allocating left matrix
-        LHS = allocate_tridiagonal(N,DType) # left-hand side matrix 
+        LHS = allocate_tridiagonal(N,DT) # left-hand side matrix 
         is_show = N <= 10
         for m = 1 : M - 1 #% цикл по времени
             Tm = @view T[:,m] # Tm current time
@@ -342,88 +323,37 @@ function unified_fd_solver!( problem::HeatTransferProblem{CF,LF,LDF,ITF, G, BCU,
                 ti = Tm[ii]
                 λ =  problem.L_f(ti) # λ
                 lam[ii] = λ
-                F[ii] = dd*λ/problem.C_f(ti) # Fm - (dx^-2)*dt*Cp/λ
-                phi[ii] = 0.25*problem.Ld_f(ti)/λ #phi  - λ'/λ
+                F[ii] = dd * λ / problem.C_f(ti) # Fm - (dx^-2)*dt*Cp/λ
+                phi[ii] = 0.25 * problem.Ld_f(ti)/λ #phi  - λ'/λ
             end 
+
             Tmp1 = @view T[:, m + 1] # Tm+1 next time 
-            Tmm1 = @view T[:, maximum((1, m - 1))] # Tm+1 next time 
+            
 
-            fill_LHS!(LHS, Fm1, F, Fp1, solver_scheme, m)
+            fill_LHS!(LHS, Fm1, F, Fp1, m, solver_scheme, problem)
 
-            fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, solver_scheme)
+            fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, solver_scheme, problem)
+            
+            apply_bc!(LHS, b, bc_up,  F, Tm, phi ,  m,  solver_scheme, problem)
 
-            apply_bc!(bc_up, LHS, b,  F,   solver_scheme, Tm, problem, m)
+            apply_bc!(LHS, b, bc_dwn, F, Tm, phi ,  m,  solver_scheme, problem)
 
-            apply_bc!(bc_dwn, LHS, b,  F,   solver_scheme, Tm, problem, m)
+            ldiv!(Tmp1 , LHS , b) # solving LHS*T = b
 
-            ldiv!(Tmp1,LHS,b) # solving
+            (TS <: BFD1) || (Tmm1 = Tm) # Tm-1 next time 
         end
    return problem
 end
-
-
-
-fill_LHS!(LHS, Fm1, F, Fp1, ::BFD1, ::IMP, _) = fill_tridiag!(LHS, Fm1, F, Fp1,1.0, -1.0, 2.0, -1.0)
-
-"""
-    fill_RHS!(b,RHS, D, Tm, Tmm1, Fm1, F, Fp1, phi, ::BFD1, ::IMP)
-
-Fills RHS vector for BFD1 - IMP scheme
-"""
-function fill_RHS!(b, D, Tm, Tmm1, Fm1, F, Fp1, phi, ::BFD1, ::IMP)
-            mul!(b,D,Tm) 
-            @. b = b^2
-            @. b *= F*phi
-            @. b += Tm # Tm + \vec{b}
-            return nothing
+function evaluate_virtual_node( Fm::T, phim::T, T2::T, T0::T) where T
+    return Fm * phim * (T2 - T0)^2
 end
-
-# apply_bc!(::AbstractBCDirection,upper_bc_type, LHS, b,  F, bc_fun ,  lhs_scheme, rhs_scheme, t, Tm, m, dx, dt, N)
-function apply_bc!(f::BoundaryFunction{Ftype,V,BCtype,BCdirection}, 
-            LHS::Tridiagonal{T,Vector{T}},
-            b,  _,  
-            ::BFD1, ::IMP, # time_scheme, coordinate_scheme
-            Tm, # current timestep temperature distribution
-            g::UniformGrid,
-            m::Int  # current time step index
-            ) where {T,Ftype,V, BCtype <: DirichletBC, BCdirection <: UpperBC}
-
-
-            LHS.d[1] = 1.0
-            LHS.du[1] = 0.0
-            b[1] = f(m + 1) # 1st order BC upper, evaluating bc for Tm+1
-            return nothing
-end
-function apply_bc!(f::BoundaryFunction{Ftype,V,BCtype,BCdirection}, 
-            LHS::Tridiagonal{T,Vector{T}},
-            b,  _,  
-            ::BFD1, ::IMP, # time_scheme, coordinate_scheme
-            Tm, # current timestep temperature distribution
-            g::UniformGrid,
-            m::Int  # current time step index
-            ) where {T,Ftype,V, BCtype <: NeumanBC, BCdirection <: UpperBC}
-
-            LHS.du[1] = 2.0*LHS.du[1]
-            b[1] = f(m + 1) # 1st order BC upper, evaluating bc for Tm+1
-            return nothing
-end
-function apply_bc!(f::BoundaryFunction{Ftype,V,BCtype,BCdirection}, 
-            LHS::Tridiagonal{T,Vector{T}},
-            b,  _,  
-            ::BFD1, ::IMP, # time_scheme, coordinate_scheme
-            Tm,
-            g::UniformGrid{N},
-            m::Int # current time step index
-            ) where {T,N,Ftype,V, BCtype <: DirichletBC, BCdirection <: LowerBC}
-
-            LHS.d[end] = 1.0
-            LHS.dl[end] = 0.0
-           
-            b[N] = f(m + 1) # 1st order BC upper, evaluating bc for Tm+1
-            return nothing
-end
-
-@doc DOC_BFD1_imp_exp_exp
+include("bfd1_imp_exp_exp.jl")
+ #= FDSolverScheme(::T,::X,::N,::P) where {T <: AbstractTimeScheme,
+                                         X <: AbstractCoordinateScheme,
+                                         N <: AbstractNonLinearPart,
+                                         P <: AbstractNonLinearPart} =#
+# fill_LHS!(LHS, Fm1, F, Fp1, m, solver_scheme, problem)
+#@doc DOC_BFD1_imp_exp_exp
  function BFD1_imp_exp_exp(C_f, L_f,Ld_f, H, tmax, initT_f,
                  bc_fun_up, bc_fun_dwn, M, N;
                  upper_bc_type::AbstractBoundaryCondition = DirichletBC() , 
@@ -443,11 +373,14 @@ end
         return (T,g,bc_up,bc_dwn)
 end
 
+
+
+
 fill_RHS!(M,Fm1,F,Fp1,::BFD1,::CN) = fill_tridiag!(M, Fm1, F, Fp1, 1.0 , 0.5, 1.0, 0.5)
 
 fill_LHS!(M,Fm1,F,Fp1,::BFD1,::CN) = fill_tridiag!(M, Fm1, F, Fp1, 1.0, -0.5, 1.0, -0.5)
 
-@doc DOC_BFD1_CN_exp_exp
+#@doc DOC_BFD1_CN_exp_exp
 function BFD1_CN_exp_exp(C_f, L_f,Ld_f, H, tmax,initT_f,BC_up_f,BC_dwn_f,M,N)
         x = range(0,H,N)# сетка по координате
         t = range(0,tmax,M)# сетка по времени
