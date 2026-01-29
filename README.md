@@ -110,4 +110,4 @@ Pluto.run()
 --------------------------------------
 ### Термокинетика
 
-Семинар 29. Методы решения обыкновенных дифференциальных уравнений. [pdf](./applications/Thermokinetics/pdfs/sem29.pdf), [jl](./applications/Thermokinetics/sem27/sem29.jl)
+Семинар 29. Методы решения обыкновенных дифференциальных уравнений. [pdf](./applications/Thermokinetics/pdfs/sem29.pdf), [jl](./applications/Thermokinetics/sem29/sem29.jl)
