@@ -102,3 +102,12 @@ Pluto.run()
 Семинар 25. Принцип максимального правдоподобия. Регуляризация при нелинейной оптимизации и метод Левенберга-Марквардта [pdf](./applications/InverseHeatTransfer/sem25/pdfs/sem25.pdf), [mlx](./applications/InverseHeatTransfer/sem25/sem25.mlx)
 
 Семинар 26. Погрешность регрессии. Оценка правильности выбранной модели. Задача планирования эксперимента [pdf](./applications/InverseHeatTransfer/sem26/pdfs/sem26.pdf), [mlx](./applications/InverseHeatTransfer/sem26/sem26.mlx)
+
+Семинар 27. Метод конечных разностей для решения нестационарного уравнения теплопроводности часть 1 [pdf](./applications/InverseHeatTransfer/sem27/pdfs/sem27.pdf), [mlx](./applications/InverseHeatTransfer/sem27/sem27.mlx)
+
+Семинар 28. Метод конечных разностей для решения нестационарного уравнения теплопроводности часть 2 [pdf](./applications/InverseHeatTransfer/sem27/pdfs/sem27.pdf), [mlx](./applications/InverseHeatTransfer/sem27/sem27.mlx)
+
+--------------------------------------
+### Термокинетика
+
+Семинар 29. Методы решения обыкновенных дифференциальных уравнений. [pdf](./applications/Thermokinetics/pdfs/sem29.pdf), [jl](./applications/Thermokinetics/sem27/sem29.jl)
