@@ -111,3 +111,9 @@ Pluto.run()
 ### Термокинетика
 
 Семинар 29. Методы решения обыкновенных дифференциальных уравнений. [pdf](./applications/Thermokinetics/pdfs/sem29.pdf), [jl](./applications/Thermokinetics/sem29/sem29.jl)
+
+
+--------------------------------------
+### Обратные задачи теплопроводности
+
+Семинар 31. Анализ чувствительности методом прямого дифференцирования [pdf](./applications/InverseHeatTransfer/sem31/pdfs/sem31.pdf), [jl](./applications/InverseHeatTransfer/sem31/sem31.jl)
