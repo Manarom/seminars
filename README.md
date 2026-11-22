@@ -117,3 +117,7 @@ Pluto.run()
 ### Обратные задачи теплопроводности
 
 Семинар 31. Анализ чувствительности методом прямого дифференцирования [pdf](./applications/InverseHeatTransfer/sem31/pdfs/sem31.pdf), [jl](./applications/InverseHeatTransfer/sem31/sem31.jl)
+
+### Теория автоматического управления 
+
+Семинар 32. Основные понятия теории управления [pdf]
