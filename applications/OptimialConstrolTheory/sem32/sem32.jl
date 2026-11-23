@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v1.1.0
+# v1.0.3
 
 using Markdown
 using InteractiveUtils
@@ -28,6 +28,9 @@ begin
 	using StaticArrays
 	using BenchmarkTools
 end
+
+# ╔═╡ de9f88b2-5506-49ed-9bae-93edeccb8da6
+using Optimization , OptimizationOptimJL
 
 # ╔═╡ cdea6217-159d-47aa-9a8d-58d5df529b49
 BP = ScaledPolynomials.BernsteinSymPoly{3};
@@ -140,6 +143,111 @@ begin
 	pl = plot(sol  , title = "Траектория состояния")
 end
 
+# ╔═╡ 36b406e3-c12c-405c-aae2-8248d3a731a3
+md"""
+
+### Ограничения
+
+#### Ограничения на параметры состояния системы 
+
+Это те ограничения которые могут быть использованы для формулирования начальных условия ОДУ. Траектория , которая лежит в границах допустимого диапазона называется допустимой траекторией (admissible trajectory)
+
+Например, начальная скорость и координата машины. 
+
+``\vec{x}(t) = \begin{pmatrix}  0 \\  0 \end{pmatrix}``
+
+
+Кроме того это могут быть ограничения на эволюцию  системы во времени. 
+
+Например, необходимо чтобы машина оказалась в  нужной точке в момент времени ``t_f``, при этом надо, чтобы она имела нулевую сокрость:
+
+``\vec{x}(t_f) = \begin{pmatrix}  L \\  0 \end{pmatrix}``
+
+Условия на вектор состояния также могут быть в виде неравенств:
+
+``\dot{x}(t) ≥ 0``  - требуем, чтобы скорость была больше нуля
+
+#### Ограничения на управляющее воздействие 
+
+Ограничения могут накладываться и на управляющее воздействие, управляющее воздействие , лежащее в границах допустимой области называте допустимым управляющим воздействием (admissible control)
+
+например, так как мы ограничены мощностью двигателя и тормозов, вектор управляющего воздействия  тоже будет ограничен.
+
+``\begin{pmatrix}  0 \\  0 \end{pmatrix} ≤ \vec{u} ≤ \begin{pmatrix}  M_1 \\  M_2 \end{pmatrix}``
+
+
+"""
+
+# ╔═╡ 39934f85-7e47-460e-a1ae-270f3eedb265
+md"""
+
+### Целевая функция задачи оптимального контроля 
+
+Общая форма целевой функции задачи оптимального управления :
+
+*``J = h(\vec{x}(t_s) , t_f) + \int_{t_0}^{t_f}{g(\vec{x} , \vec{u}(t) , t)}dt``*
+
+``h``  и ``g`` - это некоторые скалярные функции
+
+Ну и задача оптимального контроля формулируется как :
+
+Найти такое допустимое управляющее воздействие, которое дает допустимую траекторий состояния, которая минимизирует (максимизирует) целевую функцию.  
+
+"""
+
+# ╔═╡ 333a44c7-188f-44a6-940c-689113f1246d
+function get_u(p)
+	V_cur = f_V(p[1:3] , p[4:end])
+end
+
+# ╔═╡ d1021da7-dcbe-4b18-9d06-f264c0ea866d
+function single_ode_solve(p )
+	V_cur = get_u(p)
+	#f(x, p, t)
+	p = (A,B,V_cur)
+	x0 = SVector{2}([0.0 , 0.0])
+	tspan = (0.0, 1.0)
+	prob = ODEProblem(f, x0, tspan ,p)
+	sol = solve(prob, Tsit5(), reltol = 1e-3, abstol = 1e-3)
+	return sol
+end
+
+# ╔═╡ f829c1eb-466a-4e85-b49b-6c9ecc6af5b1
+function single_try(p , x_end)
+	sol = single_ode_solve(p)
+	return sum((x_end  .- sol(1.0)).^2)
+end
+
+# ╔═╡ 6f5ec9e6-455e-4f31-a682-6c154d4c8936
+probl = OptimizationProblem(single_try, [1.0 , 0.0 , 0.0 , 0.0 , 0.0 , 0.0] , [0.3 , 0.0])
+
+# ╔═╡ 8a76a6c0-dc1a-44a5-931e-cc5b845b37e4
+xres = solve(probl , NelderMead())
+
+# ╔═╡ c893ebc9-224c-4e47-aa60-66faa2fc69ff
+sol_res = single_ode_solve(xres )
+
+# ╔═╡ b08c7d2c-0a67-4834-bc56-50d5a3ada088
+plot(sol_res)
+
+# ╔═╡ a3358d9f-163d-4b53-b476-d23f1613210d
+u_res = get_u(xres)
+
+# ╔═╡ 6ddb1002-8ee4-4d56-82d1-81b8034e761f
+t_plot= range(0,1,100)
+
+# ╔═╡ 5ef28230-3763-4866-90c0-8713b1a362f3
+begin 
+	Umat = zeros((length(t_plot) , 2))
+	for i in 1:length(t_plot)
+
+		Umat[i , :] .= u_res(t_plot[i])
+	end
+end
+
+# ╔═╡ cd5ad69a-4326-4c7f-914b-216da69647c2
+plot(t_plot ,Umat )
+
 # ╔═╡ Cell order:
 # ╠═c239e2e0-e6a2-11f1-a170-cda53aa43fff
 # ╟─cdea6217-159d-47aa-9a8d-58d5df529b49
@@ -148,8 +256,22 @@ end
 # ╟─e40581bf-5a53-412a-a381-d8e5241def9a
 # ╟─c23faf42-97cf-4ac9-b741-aae1527cfb6e
 # ╟─2dd7f9c2-5f7e-4b9e-9a3d-b76c545f1e40
-# ╟─15182ca5-25b6-4b5f-823f-3757e7af301c
+# ╠═15182ca5-25b6-4b5f-823f-3757e7af301c
 # ╟─c43b5852-3f6a-49a9-92a1-e56f255098da
-# ╟─c185e898-aa6a-4827-9d8b-749bf24cfdc5
-# ╟─cce943ae-0fd0-463e-9d02-9a7ecdffd260
-# ╟─df1250b6-1c30-4f74-b89b-8edba586112e
+# ╠═c185e898-aa6a-4827-9d8b-749bf24cfdc5
+# ╠═cce943ae-0fd0-463e-9d02-9a7ecdffd260
+# ╠═df1250b6-1c30-4f74-b89b-8edba586112e
+# ╟─36b406e3-c12c-405c-aae2-8248d3a731a3
+# ╟─39934f85-7e47-460e-a1ae-270f3eedb265
+# ╠═de9f88b2-5506-49ed-9bae-93edeccb8da6
+# ╠═f829c1eb-466a-4e85-b49b-6c9ecc6af5b1
+# ╠═333a44c7-188f-44a6-940c-689113f1246d
+# ╠═d1021da7-dcbe-4b18-9d06-f264c0ea866d
+# ╠═6f5ec9e6-455e-4f31-a682-6c154d4c8936
+# ╠═8a76a6c0-dc1a-44a5-931e-cc5b845b37e4
+# ╠═c893ebc9-224c-4e47-aa60-66faa2fc69ff
+# ╠═b08c7d2c-0a67-4834-bc56-50d5a3ada088
+# ╠═a3358d9f-163d-4b53-b476-d23f1613210d
+# ╠═6ddb1002-8ee4-4d56-82d1-81b8034e761f
+# ╠═5ef28230-3763-4866-90c0-8713b1a362f3
+# ╠═cd5ad69a-4326-4c7f-914b-216da69647c2
