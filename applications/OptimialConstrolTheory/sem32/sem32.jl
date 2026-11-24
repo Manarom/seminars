@@ -248,6 +248,30 @@ end
 # ╔═╡ cd5ad69a-4326-4c7f-914b-216da69647c2
 plot(t_plot ,Umat )
 
+# ╔═╡ 4db45248-93f8-46fa-82f4-52a8ade62a49
+begin 
+
+function cost_function(p, x_end, x_start, t_start, t_end)
+    V_cur = get_u(p, t_start, t_end) # полиномы на [t_start, t_end]
+    prob = ODEProblem(f, x_start, (t_start, t_end), (A, B, V_cur))
+    sol = solve(prob, Tsit5(), reltol = 1e-4, abstol = 1e-4)
+    
+    #  (вес 100)
+    terminal_cost = 100.0 * sum((x_end .- sol(t_end)).^2)
+    
+    # энергия ∫ (u(t)^2 + v(t)^2) dt по сетке из 50 точек
+    ts = range(t_start, t_end, length=50)
+    energy_cost = sum(sum(abs2, V_cur(t)) for t in ts) * (t_end - t_start) / 50.0
+    
+    return terminal_cost + 0.1 * energy_cost
+end
+
+
+lb = zeros(6)
+ub = ones(6)
+
+end
+
 # ╔═╡ Cell order:
 # ╠═c239e2e0-e6a2-11f1-a170-cda53aa43fff
 # ╟─cdea6217-159d-47aa-9a8d-58d5df529b49
@@ -275,3 +299,4 @@ plot(t_plot ,Umat )
 # ╠═6ddb1002-8ee4-4d56-82d1-81b8034e761f
 # ╠═5ef28230-3763-4866-90c0-8713b1a362f3
 # ╠═cd5ad69a-4326-4c7f-914b-216da69647c2
+# ╠═4db45248-93f8-46fa-82f4-52a8ade62a49
